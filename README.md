@@ -72,7 +72,7 @@ python3 convert.py -i path/to/your_video.mp4 -d 60 -f 10
 
 Arguments:
 - `-i` / `--input`: Path to your video file (required).
-- `-d` / `--density`: Resolution scale for output frames (optional, default: 17).
+- `-d` / `--density`: Resolution scale for output frames (optional, default: 60).
 - `-f` / `--fps`: Target frame rate (optional, default: 7). 
 
 Example:
