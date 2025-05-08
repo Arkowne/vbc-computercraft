@@ -47,7 +47,7 @@ This computer handles video playback and downloads video frames from a web serve
 **Installation**:
 
 ```
-pastebin get JKN3hnq vbc
+pastebin get x4fctFWr vbc
 ```
 
 ### 2. Audio Player (client) – On the speaker computer
