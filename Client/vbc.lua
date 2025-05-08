@@ -7,10 +7,10 @@ local debug = true
 local dfpwm = require("cc.audio.dfpwm")
 local decoder = dfpwm.make_decoder()
 
--- Vérification des arguments
+-- VÃ©rification des arguments
 local id = args[1]
 if not id then
-    print("\nVeuillez renseigner l'ID de votre vidéo.")
+    print("\nVeuillez renseigner l'ID de votre vidÃ©o.")
     print("Commande : vbc <id>")
     print("")
     os.pullEvent()
@@ -20,7 +20,7 @@ end
 -- Trouve le moniteur et le configure
 local mon = peripheral.find("monitor")
 if not mon then
-    error("Aucun moniteur détecté.")
+    error("Aucun moniteur dÃ©tectÃ©.")
 end
 
 term.redirect(mon)
@@ -37,7 +37,7 @@ fs.makeDir("temp")
 if args[2] ~= "no" then
     speaker = peripheral.find("speaker")
     if not speaker then
-        error("Aucun speaker trouvÃ©")
+        error("Aucun speaker trouvÃÂ©")
     end
 end
 
@@ -58,13 +58,13 @@ local function checksum(path)
 end
 
 function downloadAndInspect(url, destPath)
-    -- 1) Ouvrir la requÃªte HTTP
+    -- 1) Ouvrir la requÃÂªte HTTP
     local resp = http.get(url)
     if not resp then
-        return false, "Ãchec du tÃ©lÃ©chargement", nil, nil
+        return false, "ÃÂchec du tÃÂ©lÃÂ©chargement", nil, nil
     end
 
-    -- 2) Lire lâenâtÃªte Content-Length (nil si absent)
+    -- 2) Lire lÃ¢ÂÂenÃ¢ÂÂtÃÂªte Content-Length (nil si absent)
     local headers  = resp.getResponseHeaders()
     local declared = headers and tonumber(headers["Content-Length"])
 
@@ -77,20 +77,20 @@ function downloadAndInspect(url, destPath)
     f.write(data)
     f.close()
 
-    -- 5) Mesurer la taille rÃ©elle
+    -- 5) Mesurer la taille rÃÂ©elle
     local actualSize = fs.getSize(destPath)
 
-    -- 6) VÃ©rifier cohÃ©rence taille annoncÃ©e / rÃ©elle
+    -- 6) VÃÂ©rifier cohÃÂ©rence taille annoncÃÂ©e / rÃÂ©elle
     if declared and declared ~= actualSize then
         -- avertissement, mais on continue pour le checksum
-        print(("â ï¸ Taille dÃ©clarÃ©e (%d) != taille rÃ©elle (%d)"):format(declared, actualSize))
+        print(("Ã¢ÂÂ Ã¯Â¸Â Taille dÃÂ©clarÃÂ©e (%d) != taille rÃÂ©elle (%d)"):format(declared, actualSize))
     end
 
     -- 7) Calculer le checksum
     local actualSum = checksum(destPath)
 
     return true,
-           "TÃ©lÃ©chargement et inspection terminÃ©s",
+           "TÃÂ©lÃÂ©chargement et inspection terminÃÂ©s",
            actualSize,
            actualSum
 end
@@ -101,10 +101,10 @@ function dl_audio(url)
 
     local ok, msg, size, sum = downloadAndInspect(url, path)
     if ok then
-        print(("SuccÃ¨sâ¯: taille = %d octets, checksum = %u"):format(size, sum))
+        print(("SuccÃÂ¨sÃ¢ÂÂ¯: taille = %d octets, checksum = %u"):format(size, sum))
         return "succes"
     else
-        print("Erreurâ¯: "..msg)
+        print("ErreurÃ¢ÂÂ¯: "..msg)
         return "error"
     end
 end
@@ -121,13 +121,13 @@ local function loadAudio()
     return chunks
 end
 
--- Joue tous les chunks dÃ©codÃ©s
+-- Joue tous les chunks dÃÂ©codÃÂ©s
 local function playAudio()
     local chunks = loadAudio()
     for _, c in ipairs(chunks) do
         local pcm = decoder(c)
         while not speaker.playAudio(pcm) do
-            os.pullEvent("speaker_audio_empty")  -- Attente que le speaker soit prÃªt pour jouer
+            os.pullEvent("speaker_audio_empty")  -- Attente que le speaker soit prÃÂªt pour jouer
         end
     end
 end
@@ -150,26 +150,17 @@ local function displayBLT(path)
         if #bg < len then bg=bg..string.rep("0",len-#bg) end
 
         term.setCursorPos(1, y)
-        term.blit(txt, fg, bg)
+        term.blit(string.rep( string.char( 127 ), len ), fg, bg)
         y = y + 1
     end
     f.close()
 end
 
-local function sendCommand(command, url)
-    rednet.send(audio_computer_id, { command = command, url = url })
-    local _, response = rednet.receive(2)
-    if response then
-        print("Réponse : " .. response.status .. " - " .. response.message)
-    else
-        print("Aucune réponse reçue.")
-    end
-end
 
 local function dl_image(url, fileName)
     local resp = http.get(url)
     if not resp then
-        print("Échec téléchargement : " .. url)
+        print("Ãchec tÃ©lÃ©chargement : " .. url)
         return false
     end
     local file = fs.open(fileName, "w")
@@ -198,7 +189,7 @@ end
 if args[2] ~= "no" then
     state = dl_audio(adress .. "/videos/" .. id .. "/audio.dfpwm")
     if state == "error" then
-        error("Impossible de prÃ©charger l'audio.")
+        error("Impossible de prÃÂ©charger l'audio.")
     else
         print("Audio telecharge.")
     end
@@ -220,8 +211,10 @@ end
 mon.clear()
 
 function playVideo()
-    sleep(1)
-
+    -- === Lecture synchronisÃ©e avec correction toutes les 5 secondes ===
+    startTime = os.clock()
+    local lastSync = startTime
+    local i = 0
 
     -- Demarage de la video
     while i < frames do
@@ -243,7 +236,7 @@ function playVideo()
             displayBLT(path)
             fs.delete(path)
         else
-            print("Impossible de télécharger ou d'afficher l'image : " .. path)
+            print("Impossible de tÃ©lÃ©charger ou d'afficher l'image : " .. path)
         end
 
         if args[3] == "debug" then
@@ -251,18 +244,13 @@ function playVideo()
             term.setCursorPos(1, h)
             term.setTextColor(colors.white)
             term.clearLine()
-            write(debugText)
+            write(debugText .. "FPS: " .. fps)
         end
 
         i = i + 1
         sleep(1 / fps)
     end
 end
-
-    -- === Lecture synchronisée avec correction toutes les 5 secondes ===
-startTime = os.clock()
-astSync = startTime
-i = 0
 
 parallel.waitForAll(playAudio, playVideo)
 
