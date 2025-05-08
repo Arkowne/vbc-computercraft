@@ -47,7 +47,7 @@ This computer handles video playback and downloads video frames from a web serve
 **Installation**:
 
 ```
-pastebin get x4fctFWr vbc
+pastebin get BR926BKb vbc
 ```
 
 Setup Instructions
