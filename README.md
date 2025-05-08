@@ -28,7 +28,6 @@ Each video is processed and split into individual frames, resized and exported i
   - `opencv-python`
   - `Pillow`
   - `nfp` (custom/notched pixel format converter)
-  - `blt` (you must provide your own `image_to_blt` function)
 
 
 
