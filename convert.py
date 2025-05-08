@@ -9,11 +9,7 @@ import random
 import string
 from blt import image_to_blt
 
-
-
-
 def process_frame(frame, density):
-    # Convertit l'image en RGB
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     h, w = rgb.shape[:2]
     ratio = w / h
@@ -23,52 +19,54 @@ def process_frame(frame, density):
     pil_img = Image.fromarray(resized)
     return pil_img, resized.shape[1], resized.shape[0]
 
-
 def generate_id(length=10):
-    return ''.join(random.choices(
-        string.ascii_lowercase + string.digits, k=length))
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 def extract_audio_to_dfpwm(input_path, output_path):
-    """
-    Utilise ffmpeg avec l'encodeur dfpwm intégré pour générer
-    un fichier mono 48kHz DFPWM compatible ComputerCraft.
-    """
     cmd = [
         'ffmpeg', '-y', '-i', input_path,
-        '-vn',         # pas de vidéo
-        '-ac', '1',    # mono
-        '-ar', '48000',# 48 kHz
-        '-c:a', 'dfpwm',
+        '-vn', '-ac', '1', '-ar', '48000', '-c:a', 'dfpwm',
         output_path
     ]
-    # Supprime la sortie standard/erreur pour plus de propreté
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', required=True,
-                        help="Fichier vidéo en entrée")
-    parser.add_argument('-d', '--density', type=int, default=17,
-                        help="Densité NFP par frame (contrôle la taille du redimensionnement)")
-    parser.add_argument('-f', '--fps', type=int, default=7,
-                        help="Images par seconde cible")
+    parser.add_argument('-i', '--input', required=True, help="Fichier vidéo en entrée")
+    parser.add_argument('-d', '--density', type=int, default=60, help="Densité NFP par frame")
+    parser.add_argument('-f', '--fps', type=int, default=7, help="Images par seconde cible")
     args = parser.parse_args()
 
     video_id = generate_id()
     output_dir = os.path.join("videos", video_id)
     os.makedirs(output_dir, exist_ok=True)
 
-    # Extrait l'audio en DFPWM via ffmpeg
+    # 🎵 Extraction audio
     out_audio = os.path.join(output_dir, 'audio.dfpwm')
     print(f"🔊 Extraction audio vers {out_audio}")
     extract_audio_to_dfpwm(args.input, out_audio)
 
-    # Processus vidéo -> NFP
+    # 🎞️ Ouverture vidéo
     cap = cv2.VideoCapture(args.input)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     source_fps = cap.get(cv2.CAP_PROP_FPS) or args.fps
     skip_ratio = int(round(source_fps / args.fps)) if args.fps < source_fps else 1
     print(f"🎥 Source FPS: {source_fps:.2f}, Target FPS: {args.fps}, Skip ratio: {skip_ratio}")
 
+    # 📸 Génération preview.jpg à partir d'une frame aléatoire
+    rand_index = random.randint(0, max(0, total_frames - 1))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, rand_index)
+    ret, frame = cap.read()
+    if ret:
+        pil_img, _, _ = process_frame(frame, args.density)
+        preview_path = os.path.join(output_dir, "preview.jpg")
+        pil_img.save(preview_path)
+        print(f"🖼️ Image de prévisualisation enregistrée : {preview_path}")
+    else:
+        print("❌ Impossible de capturer une frame pour la preview.")
+
+    # 🔁 Recommencer depuis le début pour le vrai traitement
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     idx = 0
     frame_num = 0
     while True:
@@ -76,14 +74,10 @@ def main():
         if not ret:
             break
         if frame_num % skip_ratio == 0:
-            # Sauvegarde le frame temporairement
             temp_path = os.path.join(output_dir, f"_temp_{idx:05d}.png")
             cv2.imwrite(temp_path, frame)
 
-            # Convertit la frame en image NFP
             pil_img, resized_width, resized_height = process_frame(frame, args.density)
-
-            # Convertit en .blt avec image_to_blt
             blt_path = os.path.join(output_dir, f"frame_{idx:05d}.blt")
             image_to_blt(temp_path, blt_path, width=resized_width, height=resized_height)
             os.remove(temp_path)
@@ -92,7 +86,7 @@ def main():
         frame_num += 1
     cap.release()
 
-    # Fichier metadata
+    # 📝 Metadata
     meta = os.path.join(output_dir, 'metadata.txt')
     with open(meta, 'w') as m:
         m.write(f"fps={args.fps}\nframes={idx}\n")
@@ -100,7 +94,7 @@ def main():
     print(f"\n✅ Génération terminée !")
     print(f"📂 ID: {video_id}")
     print(f"📁 Dossier: {output_dir}")
-    print(f"🖼️ {idx} frames | 🎵 audio.dfpwm | 📝 metadata.txt")
+    print(f"🖼️ {idx} frames | 🎵 audio.dfpwm | 📝 metadata.txt | 🖼️ preview.jpg")
 
 if __name__ == '__main__':
     main()
