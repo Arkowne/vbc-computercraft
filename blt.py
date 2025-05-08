@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.neighbors import KDTree
 import palette
 
-COLOR_MAP = palette.COLOR_PALETTE
+COLOR_MAP = palette.COLOR_MAP
 DEFAULT = (" ", "0", "0")
 
 _KEYS = np.array(list(COLOR_MAP.keys()))
