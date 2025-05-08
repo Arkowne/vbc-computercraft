@@ -100,17 +100,34 @@ vbc_hifi
 ```
 
 ### Step 3: Host your video
+-----
+Run the script via command line:
 
-Host the folder containing your video data at:
+```bash
+python3 convert.py -i path/to/your_video.mp4 -d 17 -f 7
+```
 
-```
-http://<your-ip>:4334/videos/<video_id>/
-```
+Arguments:
+- `-i` / `--input`: Path to your video file (required).
+- `-d` / `--density`: Resolution scale for output frames (optional, default: 17).
+- `-f` / `--fps`: Target frame rate (optional, default: 7). 
 
 Example:
+```bash
+python3 convert.py -i funny_cat.mp4 -d 17 -f 7
 ```
-http://192.168.1.42:4334/videos/demo_video/
-```
+
+Output
+------
+The script will create a folder inside `videos/` with a random ID name (e.g., `videos/abc123xyz`).
+This folder will contain:
+- `frame_00000.blt`, `frame_00001.blt`, etc. — All video frames converted to BLT.
+- `audio.dfpwm` — The audio stream converted to DFPWM.
+- `metadata.txt` — Contains:
+    - `fps=7`
+    - `frames=123`
+- The program will also give you the id of your video, keep it in mind !
+  (I will do a UI for the video upload/listing in the next update)
 
 ### Step 4: Play a video
 
@@ -120,24 +137,20 @@ From the monitor computer:
 vbc <video_id>
 ```
 
-Example:
-
-```
-vbc demo_video
-```
-
 To disable audio:
 
 ```
-vbc demo_video no
+vbc <video_id> no
 ```
+
+**Warning: The program does't support audio file of 1000KB or more yet, so disable the audio for long video or your audio computer will crash !**
 
 ---
 
-Required Server Folder Structure
+Server Folder Structure
 --------------------------------
 
-Each video must be structured like this:
+Each video will be structured like this:
 
 ```
 videos/
@@ -173,8 +186,3 @@ License
 
 MIT License — Free to use, modify, and distribute.
 
-
-Install dependencies:
-
-```bash
-pip install opencv-python Pillow nfp
