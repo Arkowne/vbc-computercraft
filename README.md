@@ -41,7 +41,7 @@ This computer handles video playback and downloads video frames from a web serve
 
 **Requirements**:
 - A **monitor** peripheral (any size)
-- A **modem** peripheral
+- A **speaker** peripheral
 - HTTP API must be enabled in ComputerCraft if you use a HTTP server adress (usefull with local server)
 
 **Installation**:
@@ -55,7 +55,7 @@ Setup Instructions
 
 ### Step 1: Configure your monitor computer
 
-Open the client computer and set the modem side and your server IP:
+Open the client computer and set your server IP:
 
 ```
 set vbc.ip_server your_ip:4334  -- Replace your_ip with the actual IP of your VBC Server e.g. http://0.0.0.0:4334
@@ -67,7 +67,7 @@ set vbc.ip_server your_ip:4334  -- Replace your_ip with the actual IP of your VB
 Run the script via command line:
 
 ```bash
-python3 convert.py -i path/to/your_video.mp4 -d 17 -f 7
+python3 convert.py -i path/to/your_video.mp4 -d 60 -f 10
 ```
 
 Arguments:
@@ -87,10 +87,10 @@ This folder will contain:
 - `frame_00000.blt`, `frame_00001.blt`, etc. — All video frames converted to BLT.
 - `audio.dfpwm` — The audio stream converted to DFPWM.
 - `metadata.txt` — Contains:
-    - `fps=7`
+    - `fps=10`
     - `frames=123`
 - The program will also give you the id of your video, keep it in mind !
-  (I will do a UI for the video upload/listing in the next update)
+  (I will do a UI for the video upload/listing in the next major update)
 
 ### Step 4: Start the server
 
@@ -112,7 +112,7 @@ To disable audio:
 vbc <video_id> no
 ```
 
-**Warning: The program does't support big audio file yet, so disable the audio for long video or your audio computer will crash !**
+**Warning: The program does't support big audio file yet, so disable the audio for long video or your computer will crash !**
 
 ---
 
