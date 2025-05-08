@@ -3,6 +3,10 @@ local args = { ... }
 -- === Mode DEBUG ===
 local debug = true
 
+-- Initialise DFPWM
+local dfpwm = require("cc.audio.dfpwm")
+local decoder = dfpwm.make_decoder()
+
 -- Vérification des arguments
 local id = args[1]
 if not id then
@@ -28,11 +32,107 @@ local w, h = mon.getSize()
 local adress = settings.get("vbc.ip_server", true)
 fs.makeDir("temp")
 
+
+-- Trouve le speaker et le configure
 if args[2] ~= "no" then
-    local side_audio = settings.get("vbc.side_audio", true)
-    audio_computer_id = settings.get("vbc.audio_id", true)
-    rednet.open(side_audio)
+    speaker = peripheral.find("speaker")
+    if not speaker then
+        error("Aucun speaker trouvÃ©")
+    end
 end
+
+local function checksum(path)
+    if not fs.exists(path) then error("Fichier introuvable : "..path) end
+    local h = fs.open(path, "rb")
+    local sum = 0
+    repeat
+        local chunk = h.read(1024)
+        if chunk then
+            for i = 1, #chunk do
+                sum = (sum + chunk:byte(i)) % 2^32
+            end
+        end
+    until not chunk
+    h.close()
+    return sum
+end
+
+function downloadAndInspect(url, destPath)
+    -- 1) Ouvrir la requÃªte HTTP
+    local resp = http.get(url)
+    if not resp then
+        return false, "Ãchec du tÃ©lÃ©chargement", nil, nil
+    end
+
+    -- 2) Lire lâenâtÃªte Content-Length (nil si absent)
+    local headers  = resp.getResponseHeaders()
+    local declared = headers and tonumber(headers["Content-Length"])
+
+    -- 3) Lire tout le contenu
+    local data = resp.readAll()
+    resp.close()
+
+    -- 4) Sauvegarder sur le disque
+    local f = fs.open(destPath, "wb")
+    f.write(data)
+    f.close()
+
+    -- 5) Mesurer la taille rÃ©elle
+    local actualSize = fs.getSize(destPath)
+
+    -- 6) VÃ©rifier cohÃ©rence taille annoncÃ©e / rÃ©elle
+    if declared and declared ~= actualSize then
+        -- avertissement, mais on continue pour le checksum
+        print(("â ï¸ Taille dÃ©clarÃ©e (%d) != taille rÃ©elle (%d)"):format(declared, actualSize))
+    end
+
+    -- 7) Calculer le checksum
+    local actualSum = checksum(destPath)
+
+    return true,
+           "TÃ©lÃ©chargement et inspection terminÃ©s",
+           actualSize,
+           actualSum
+end
+
+function dl_audio(url)
+    local path = "audio.dfpwm"
+    print( "URL : " .. url)
+
+    local ok, msg, size, sum = downloadAndInspect(url, path)
+    if ok then
+        print(("SuccÃ¨sâ¯: taille = %d octets, checksum = %u"):format(size, sum))
+        return "succes"
+    else
+        print("Erreurâ¯: "..msg)
+        return "error"
+    end
+end
+
+local function loadAudio()
+    local h = fs.open("audio.dfpwm", "rb")
+    if not h then return {} end
+    local raw = h.readAll()
+    h.close()
+    local chunks, size = {}, 16 * 1024
+    for i = 1, #raw, size do
+        chunks[#chunks + 1] = raw:sub(i, i + size - 1)
+    end
+    return chunks
+end
+
+-- Joue tous les chunks dÃ©codÃ©s
+local function playAudio()
+    local chunks = loadAudio()
+    for _, c in ipairs(chunks) do
+        local pcm = decoder(c)
+        while not speaker.playAudio(pcm) do
+            os.pullEvent("speaker_audio_empty")  -- Attente que le speaker soit prÃªt pour jouer
+        end
+    end
+end
+
+
 
 local function displayBLT(path)
     local f = fs.open(path,"r")
@@ -96,17 +196,16 @@ local function load_metadata()
 end
 
 if args[2] ~= "no" then
-    print("Téléchargement de l'audio...")
-    sendCommand("preload", adress .. "/videos/" .. id .. "/audio.dfpwm")
-    sleep(3)
-    print("Audio téléchargé.")
+    state = dl_audio(adress .. "/videos/" .. id .. "/audio.dfpwm")
+    if state == "error" then
+        error("Impossible de prÃ©charger l'audio.")
+    else
+        print("Audio telecharge.")
+    end
 end
 
 local fps, frames = load_metadata()
-if args[2] ~= "no" then
-    sendCommand("play")
-    sleep(0.5)
-end
+
 
 function file_exists(path)
     local file = io.open(path, "r")
@@ -120,43 +219,52 @@ end
 
 mon.clear()
 
--- === Lecture synchronisée avec correction toutes les 5 secondes ===
-local startTime = os.clock()
-local lastSync = startTime
-local i = 0
+function playVideo()
+    sleep(1)
 
-while i < frames do
-    local now = os.clock()
 
-    -- Recalage toutes les 5 secondes
-    if now - lastSync >= 5 then
-        local elapsed = math.ceil(now - startTime)
-        i = elapsed * fps
-        lastSync = now
-        if i >= frames then break end
+    -- Demarage de la video
+    while i < frames do
+        local now = os.clock()
+
+        -- Recalage toutes les 5 secondes
+        if now - lastSync >= 5 then
+            local elapsed = math.ceil(now - startTime)
+            i = elapsed * fps
+            lastSync = now
+            if i >= frames then break end
+        end
+
+        local index = string.format("%05d", i)
+        local url = adress .. "/videos/" .. id .. "/frame_" .. index .. ".blt"
+        local path = "temp/frame_" .. index .. ".blt"
+
+        if dl_image(url, path) and file_exists(path) then
+            displayBLT(path)
+            fs.delete(path)
+        else
+            print("Impossible de télécharger ou d'afficher l'image : " .. path)
+        end
+
+        if args[3] == "debug" then
+            local debugText = string.format("Frame: %d/%d | Time: %.2fs", i, frames, now - startTime)
+            term.setCursorPos(1, h)
+            term.setTextColor(colors.white)
+            term.clearLine()
+            write(debugText)
+        end
+
+        i = i + 1
+        sleep(1 / fps)
     end
-
-    local index = string.format("%05d", i)
-    local url = adress .. "/videos/" .. id .. "/frame_" .. index .. ".blt"
-    local path = "temp/frame_" .. index .. ".blt"
-
-    if dl_image(url, path) and file_exists(path) then
-        displayBLT(path)
-        fs.delete(path)
-    else
-        print("Impossible de télécharger ou d'afficher l'image : " .. path)
-    end
-
-    if args[3] == "debug" then
-        local debugText = string.format("Frame: %d/%d | Time: %.2fs", i, frames, now - startTime)
-        term.setCursorPos(1, h)
-        term.setTextColor(colors.white)
-        term.clearLine()
-        write(debugText)
-    end
-
-    i = i + 1
-    sleep(1 / fps)
 end
+
+    -- === Lecture synchronisée avec correction toutes les 5 secondes ===
+startTime = os.clock()
+astSync = startTime
+i = 0
+
+parallel.waitForAll(playAudio, playVideo)
+
 
 mon.clear()
