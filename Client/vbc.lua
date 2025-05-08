@@ -123,11 +123,11 @@ end
 
 -- Joue tous les chunks dÃÂ©codÃÂ©s
 local function playAudio()
-    local chunks = loadAudio()
+    startTimeSound = os.clock()
     for _, c in ipairs(chunks) do
         local pcm = decoder(c)
         while not speaker.playAudio(pcm) do
-            os.pullEvent("speaker_audio_empty")  -- Attente que le speaker soit prÃÂªt pour jouer
+            os.pullEvent("speaker_audio_empty")  -- Attente que le speaker soit prÃÂªt pour joue
         end
     end
 end
@@ -221,8 +221,9 @@ function playVideo()
         local now = os.clock()
 
         -- Recalage toutes les 5 secondes
-        if now - lastSync >= 5 then
-            local elapsed = math.ceil(now - startTime)
+        if now - lastSync >= 3 then
+            local elapsed = math.ceil(now - startTimeSound)
+            videoTime = math.ceil((now - startTime))
             i = elapsed * fps
             lastSync = now
             if i >= frames then break end
@@ -244,7 +245,10 @@ function playVideo()
             term.setCursorPos(1, h)
             term.setTextColor(colors.white)
             term.clearLine()
-            write(debugText .. "FPS: " .. fps)
+            now = os.clock()
+            soundTime = os.clock() - startTimeSound
+            diff = videoTime - soundTime
+            write(debugText .. "FPS: " .. fps .. " Theoric Frame: " .. (math.ceil((now - startTime)) * fps) .. "| Sound Time:" .. soundTime .. "Diff: ".. diff)
         end
 
         i = i + 1
@@ -252,7 +256,12 @@ function playVideo()
     end
 end
 
+startTimeSound = 0
+soundTime = 0
+videoTime = 0
+diff = 0
+chunks = loadAudio()
 parallel.waitForAll(playAudio, playVideo)
 
 
-mon.clear()
+
