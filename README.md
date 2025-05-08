@@ -129,7 +129,13 @@ This folder will contain:
 - The program will also give you the id of your video, keep it in mind !
   (I will do a UI for the video upload/listing in the next update)
 
-### Step 4: Play a video
+### Step 4: Start the server
+
+```bash
+python3 server.py
+```
+
+### Step 5: Play a video
 
 From the monitor computer:
 
