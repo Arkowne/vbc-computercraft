@@ -3,7 +3,6 @@ import os
 import subprocess
 import cv2
 from PIL import Image
-import nfp
 import argparse
 import random
 import string
@@ -49,8 +48,16 @@ def main():
     # 🎞️ Ouverture vidéo
     cap = cv2.VideoCapture(args.input)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    source_fps = cap.get(cv2.CAP_PROP_FPS) or args.fps
-    skip_ratio = int(round(source_fps / args.fps)) if args.fps < source_fps else 1
+    source_fps = cap.get(cv2.CAP_PROP_FPS)
+    if not source_fps or source_fps <= 0:
+        print(f"⚠️ Impossible de lire le FPS source, on utilise fps cible = {args.fps}")
+        source_fps = args.fps
+    else:
+        print(f"✅ FPS source lu correctement : {source_fps:.2f}")
+    if source_fps > args.fps:
+        skip_ratio = max(1, int(round(source_fps / args.fps)))
+    else:
+        skip_ratio = 1
     print(f"🎥 Source FPS: {source_fps:.2f}, Target FPS: {args.fps}, Skip ratio: {skip_ratio}")
 
     # 📸 Génération preview.jpg à partir d'une frame aléatoire
@@ -67,22 +74,28 @@ def main():
 
     # 🔁 Recommencer depuis le début pour le vrai traitement
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    step = source_fps / args.fps
+    next_capture = 0.0
+    frame_num = 0
     idx = 0
     frame_num = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-        if frame_num % skip_ratio == 0:
+
+        if frame_num >= round(next_capture):
+            # on capture
             temp_path = os.path.join(output_dir, f"_temp_{idx:05d}.png")
             cv2.imwrite(temp_path, frame)
-
-            pil_img, resized_width, resized_height = process_frame(frame, args.density)
+            pil_img, w, h = process_frame(frame, args.density)
             blt_path = os.path.join(output_dir, f"frame_{idx:05d}.blt")
-            image_to_blt(temp_path, blt_path, width=resized_width, height=resized_height)
+            image_to_blt(temp_path, blt_path, width=w, height=h)
             os.remove(temp_path)
 
             idx += 1
+            next_capture += step
+
         frame_num += 1
     cap.release()
 
