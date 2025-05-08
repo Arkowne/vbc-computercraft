@@ -219,16 +219,7 @@ function playVideo()
     -- Demarage de la video
     while i < frames do
         local now = os.clock()
-
-        -- Recalage toutes les 5 secondes
-        if now - lastSync >= 3 then
-            local elapsed = math.ceil(now - startTimeSound)
-            videoTime = math.ceil((now - startTime))
-            i = elapsed * fps
-            lastSync = now
-            if i >= frames then break end
-        end
-
+        i = math.ceil((now - startTimeSound)*fps)
         local index = string.format("%05d", i)
         local url = adress .. "/videos/" .. id .. "/frame_" .. index .. ".blt"
         local path = "temp/frame_" .. index .. ".blt"
@@ -241,14 +232,14 @@ function playVideo()
         end
 
         if args[3] == "debug" then
-            local debugText = string.format("Frame: %d/%d | Time: %.2fs", i, frames, now - startTime)
+            local debugText = string.format("Frame: %d/%d | Time: %.2fs", i, frames, now - startTimeSound)
             term.setCursorPos(1, h)
             term.setTextColor(colors.white)
             term.clearLine()
             now = os.clock()
             soundTime = os.clock() - startTimeSound
             diff = videoTime - soundTime
-            write(debugText .. "FPS: " .. fps .. " Theoric Frame: " .. (math.ceil((now - startTime)) * fps) .. "| Sound Time:" .. soundTime .. "Diff: ".. diff)
+            write(debugText .. " | FPS: " .. fps)
         end
 
         i = i + 1
