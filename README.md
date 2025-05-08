@@ -15,7 +15,11 @@ Each video is processed and split into individual frames, resized and exported i
 - Metadata generation for playback
 - CLI interface for batch processing
 
+
 ---
+
+
+![](https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/demo.mp4)
 
 ## 🧰 Requirements for the server
 
@@ -45,7 +49,7 @@ This computer handles video playback and downloads video frames from a web serve
 **Installation**:
 
 ```
-pastebin get 1234567 vbc
+pastebin get JKN3hnq vbc
 ```
 
 ### 2. Audio Player (client) – On the speaker computer
@@ -60,7 +64,7 @@ This computer receives the audio file via HTTP and plays it using the `speaker` 
 **Installation**:
 
 ```
-pastebin get 7654321 audio
+pastebin get cGG5rYn3 vbc_hifi
 ```
 
 ---
