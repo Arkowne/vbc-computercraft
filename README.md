@@ -47,7 +47,7 @@ This computer handles video playback and downloads video frames from a web serve
 **Installation**:
 
 ```
-pastebin get BR926BKb vbc
+wget https://raw.githubusercontent.com/Arkowne/vbc-computercraft/refs/heads/main/Client/vbc.lua vbc
 ```
 
 Setup Instructions
