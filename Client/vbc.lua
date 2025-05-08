@@ -124,10 +124,12 @@ end
 -- Joue tous les chunks dÃÂ©codÃÂ©s
 local function playAudio()
     startTimeSound = os.clock()
-    for _, c in ipairs(chunks) do
-        local pcm = decoder(c)
-        while not speaker.playAudio(pcm) do
-            os.pullEvent("speaker_audio_empty")  -- Attente que le speaker soit prÃÂªt pour joue
+    if args[2] ~= "no" then
+        for _, c in ipairs(chunks) do
+            local pcm = decoder(c)
+            while not speaker.playAudio(pcm) do
+                os.pullEvent("speaker_audio_empty")  -- Attente que le speaker soit prÃÂªt pour joue
+            end
         end
     end
 end
@@ -253,6 +255,5 @@ videoTime = 0
 diff = 0
 chunks = loadAudio()
 parallel.waitForAll(playAudio, playVideo)
-
 
 
