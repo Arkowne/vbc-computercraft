@@ -75,7 +75,7 @@ Open the monitor computer and set the modem side and your server IP:
 ```
 settings.set("vbc.side_audio", "bottom")
 settings.set("vbc.audio_id", 2)  -- Replace 2 with the actual ID of the audio computer
-settings.set("vbc.ip_server", "your_ip:4334")  -- Replace your_ip with the actual IP of your VBC Server
+settings.set("vbc.ip_server", "your_ip:4334")  -- Replace your_ip with the actual IP of your VBC Server e.g. http://0.0.0.0:4334
 settings.save()
 ```
 
