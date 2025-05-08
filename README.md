@@ -50,58 +50,19 @@ This computer handles video playback and downloads video frames from a web serve
 pastebin get x4fctFWr vbc
 ```
 
-### 2. Audio Player (client) – On the speaker computer
-
-This computer receives the audio file via HTTP and plays it using the `speaker` peripheral.
-
-**Requirements**:
-- A **speaker** peripheral
-- A **modem** peripheral
-- HTTP API enabled
-
-**Installation**:
-
-```
-pastebin get cGG5rYn3 vbc_hifi
-```
-
----
-
 Setup Instructions
 ------------------
 
 ### Step 1: Configure your monitor computer
 
-Open the monitor computer and set the modem side and your server IP:
+Open the client computer and set the modem side and your server IP:
 
 ```
-settings.set("vbc.side_audio", "bottom")
-settings.set("vbc.audio_id", 2)  -- Replace 2 with the actual ID of the audio computer
-settings.set("vbc.ip_server", "your_ip:4334")  -- Replace your_ip with the actual IP of your VBC Server e.g. http://0.0.0.0:4334
-settings.save()
+set vbc.ip_server your_ip:4334  -- Replace your_ip with the actual IP of your VBC Server e.g. http://0.0.0.0:4334
 ```
 
-> You can get the ID of the audio computer by running:
-> ```
-> os.getComputerID()
-> ```
 
-### Step 2: Configure your audio computer
-
-On the audio computer, set the modem side:
-
-```
-settings.set("vbc_hifi.side", "bottom")
-settings.save()
-```
-
-Then run the audio server:
-
-```
-vbc_hifi
-```
-
-### Step 3: Host your video
+### Step 2: Host your video
 -----
 Run the script via command line:
 
@@ -139,7 +100,7 @@ python3 server.py
 
 ### Step 5: Play a video
 
-From the monitor computer:
+From the client computer:
 
 ```
 vbc <video_id>
@@ -151,7 +112,7 @@ To disable audio:
 vbc <video_id> no
 ```
 
-**Warning: The program does't support audio file of 1000KB or more yet, so disable the audio for long video or your audio computer will crash !**
+**Warning: The program does't support big audio file yet, so disable the audio for long video or your audio computer will crash !**
 
 ---
 
