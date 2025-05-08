@@ -40,7 +40,7 @@ This computer handles video playback and downloads video frames from a web serve
 **Requirements**:
 - A **monitor** peripheral (any size)
 - A **modem** peripheral
-- HTTP API must be enabled in ComputerCraft
+- HTTP API must be enabled in ComputerCraft if you use a HTTP server adress (usefull with local server)
 
 **Installation**:
 
@@ -70,11 +70,12 @@ Setup Instructions
 
 ### Step 1: Configure your monitor computer
 
-Open the monitor computer and set the modem side:
+Open the monitor computer and set the modem side and your server IP:
 
 ```
 settings.set("vbc.side_audio", "bottom")
 settings.set("vbc.audio_id", 2)  -- Replace 2 with the actual ID of the audio computer
+settings.set("vbc.server_ip", "your_ip")  -- Replace your_ip with the actual IP of your VBC Server
 settings.save()
 ```
 
@@ -95,7 +96,7 @@ settings.save()
 Then run the audio server:
 
 ```
-audio
+vbc_hifi
 ```
 
 ### Step 3: Host your video
