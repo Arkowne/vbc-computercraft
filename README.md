@@ -16,12 +16,7 @@ Each video is processed and split into individual frames, resized and exported i
 - CLI interface for batch processing
 
 
----
-
-
-![Demo :](https://github.com/user-attachments/assets/4539e06b-ce17-4e9b-98c0-db8d496481b1)
-
-
+![demo](https://github.com/user-attachments/assets/2f9e78f2-0fb1-492d-85f7-ddef02f418c7)
 
 
 
