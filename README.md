@@ -61,8 +61,8 @@ set vbc.ip_server your_ip:4334  -- Replace your_ip with the actual IP of your VB
 
 ### Step 2: Host your video
 -----
-## Option 1
-While server.py is launched, go to `your_ip:4334` (by default `http://localhost:4334`) and use the web UI to upload your videos.
+## Option 1 (the easiest)
+Launch server.py and go to `your_ip:4334` (by default `http://localhost:4334`) and use the web UI to upload your videos.
 
 ## Option 2
 Run the script via command line:
