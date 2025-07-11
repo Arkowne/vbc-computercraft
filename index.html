@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VBC - Videos</title>
+  <link rel="icon" type="image/x-icon" href="https://i.postimg.cc/qMDp0t0p/logo.png">
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0; padding: 0;
+    background: #f4f4f4;
+  }
+  header {
+    background: #222;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+  }
+  header .logo {
+    display: flex;
+    align-items: center;
+  }
+  header .logo img {
+    height: 30px;
+    margin-right: 10px;
+  }
+  header .logo span {
+    font-weight: bold;
+    font-size: 1.2em;
+  }
+  header button {
+    background: orange;
+    border: none;
+    padding: 10px 15px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 3px;
+    color: white;
+  }
+  #uploadForm {
+    display: none;
+    margin: 20px;
+  }
+  #uploadForm input[type=file] {
+    margin-right: 10px;
+  }
+  #videos-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 20px;
+  }
+  .video-card {
+    background: white;
+    width: 160px;
+    border-radius: 4px;
+    box-shadow: 0 0 6px rgba(0,0,0,0.1);
+    text-align: center;
+    padding: 10px;
+  }
+  .video-card img {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    background: black;
+  }
+  .video-id {
+    margin-top: 8px;
+    font-weight: bold;
+    word-break: break-word;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <img src="https://i.postimg.cc/qMDp0t0p/logo.png" alt="Logo" />
+    <span>VBC</span>
+  </div>
+  <button id="uploadBtn">Upload</button>
+</header>
+
+<form id="uploadForm" enctype="multipart/form-data">
+  <input type="file" name="video" accept="video/*" required />
+  <button type="submit">Envoyer</button>
+  <button type="button" id="cancelUpload">Annuler</button>
+</form>
+
+<main id="videos-container">
+  Chargement des vidéos...
+</main>
+
+<script>
+  const uploadBtn = document.getElementById('uploadBtn');
+  const uploadForm = document.getElementById('uploadForm');
+  const cancelUpload = document.getElementById('cancelUpload');
+  const videosContainer = document.getElementById('videos-container');
+
+  uploadBtn.onclick = () => {
+    uploadForm.style.display = 'block';
+    uploadBtn.style.display = 'none';
+  };
+
+  cancelUpload.onclick = () => {
+    uploadForm.style.display = 'none';
+    uploadBtn.style.display = 'inline-block';
+  };
+
+  uploadForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(uploadForm);
+    const fileInput = uploadForm.querySelector('input[type=file]');
+    if (fileInput.files.length === 0) {
+      alert("Veuillez choisir une vidéo.");
+      return;
+    }
+    uploadForm.querySelector('button[type=submit]').disabled = true;
+    try {
+      const res = await fetch('/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Erreur lors de l\'upload');
+      alert("Upload réussi !");
+      uploadForm.reset();
+      uploadForm.style.display = 'none';
+      uploadBtn.style.display = 'inline-block';
+      loadVideos();
+    } catch(err) {
+      alert("Erreur: " + err.message);
+    } finally {
+      uploadForm.querySelector('button[type=submit]').disabled = false;
+    }
+  };
+
+  async function loadVideos() {
+    videosContainer.textContent = "Chargement des vidéos...";
+    try {
+      const res = await fetch('/api/videos');
+      const videos = await res.json();
+      if (videos.length === 0) {
+        videosContainer.textContent = "Aucune vidéo trouvée.";
+        return;
+      }
+      videosContainer.innerHTML = '';
+      videos.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.innerHTML = `
+          <img src="${v.preview}" alt="Preview ${v.id}">
+          <div class="video-id">${v.id}</div>
+        `;
+        videosContainer.appendChild(card);
+      });
+    } catch {
+      videosContainer.textContent = "Erreur de chargement des vidéos.";
+    }
+  }
+
+  loadVideos();
+</script>
+</body>
+</html>
