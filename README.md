@@ -24,10 +24,7 @@ Each video is processed and split into individual frames, resized and exported i
 
 - Python 3.7+
 - [FFmpeg](https://ffmpeg.org/)
-- Python packages:
-  - `opencv-python`
-  - `Pillow`
-  - `nfp` (custom/notched pixel format converter)
+- Python packages in `requirements.txt`
 
 
 
