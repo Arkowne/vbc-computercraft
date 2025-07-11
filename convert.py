@@ -94,11 +94,15 @@ def convert_video(input_path, density=60, fps=7):
 
     return video_id, output_dir
 
-# Entrée CLI
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', required=True)
     parser.add_argument('-d', '--density', type=int, default=60)
     parser.add_argument('-f', '--fps', type=int, default=7)
     args = parser.parse_args()
     convert_video(args.input, args.density, args.fps)
+
+
+# Entrée CLI
+if __name__ == '__main__':
+    main()
