@@ -5,7 +5,7 @@ import numpy as np
 import palette
 
 # Palette fixe (ton mapping couleur → char/fg/bg)
-COLOR_MAP = palette.COLOR_MAP
+COLOR_MAP = palette.COLOR_PALETTE
 
 _KEYS = np.array(list(COLOR_MAP.keys()), dtype=np.float32)  # palette RGB
 _VALS = list(COLOR_MAP.values())
