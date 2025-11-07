@@ -29,7 +29,6 @@ local function download_file(url, path)
     file.write(content)
     file.close()
 
-    print("File saved as: " .. path)
     return true
 end
 
@@ -38,4 +37,5 @@ for _, file_info in ipairs(files_to_download) do
     download_file(file_info.url, file_info.path)
 end
 
-print("✅ All files have been downloaded!")
+print("All files have been downloaded!")
+
