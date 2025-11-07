@@ -1,5 +1,3 @@
-Here’s the full English translation of your simplified installation guide.  
-
 ***
 
 ### 🎞️ Video Block Converter – Simplified Installation
