@@ -1,126 +1,77 @@
-# 🎞️ Video Block Converter for ComputerCraft
+Here’s the full English translation of your simplified installation guide.  
 
-This project converts standard video files into frame-by-frame `.blt` images and DFPWM audio, fully compatible with the [ComputerCraft](https://tweaked.cc/) mod in Minecraft.
+***
 
-Each video is processed and split into individual frames, resized and exported in the `.blt` format using a custom NFP (Notchian Frame Protocol) rendering style called blit. The audio is also extracted and encoded in `dfpwm` format, which is supported by in-game audio players like `speaker.playDFPWM`.
+### 🎞️ Video Block Converter – Simplified Installation
 
----
+This project lets you play videos inside [ComputerCraft](https://tweaked.cc/) using a server and a client connected to a monitor and a speaker.
 
-## ✨ Features
+***
 
-- Converts any video into `.blt` frames
-- Preserves original aspect ratio (no padding)
-- DFPWM audio extraction (mono, 48kHz)
-- Adjustable FPS and image density
-- Metadata generation for playback
-- CLI interface for batch processing
+### 🧰 Server Requirements
 
+- Python 3.7 or higher  
+- [FFmpeg](https://ffmpeg.org/) installed  
+- Python packages listed in `requirements.txt`  
+  (install them with: `pip install -r requirements.txt`)
 
-![demo](https://github.com/user-attachments/assets/2f9e78f2-0fb1-492d-85f7-ddef02f418c7)
+***
 
+### ⚙️ Client Installation (monitor computer)
 
+1. Open a computer in ComputerCraft.  
+2. Download the client program:  
 
-## 🧰 Requirements for the server
+   ```
+   wget https://raw.githubusercontent.com/Arkowne/vbc-computercraft/refs/heads/main/Client/vbc.lua vbc
+   ```
 
-- Python 3.7+
-- [FFmpeg](https://ffmpeg.org/)
-- Python packages in `requirements.txt`
+3. Set your server IP address:  
 
+   ```
+   set vbc.ip_server your_ip:4334
+   ```
 
+   Replace `your_ip` with your actual server address (e.g., `http://0.0.0.0:4334`).
 
+***
 
-Installation Guide
-------------------
+### 🖥️ Start the Server
 
-### 1. Video Player (client) – On the monitor computer
-
-This computer handles video playback and downloads video frames from a web server.
-
-**Requirements**:
-- A **monitor** peripheral (any size)
-- A **speaker** peripheral
-- HTTP API must be enabled in ComputerCraft if you use a HTTP server adress (usefull with local server)
-
-**Installation**:
+On your host machine:  
 
 ```
-wget https://raw.githubusercontent.com/Arkowne/vbc-computercraft/refs/heads/main/Client/vbc.lua vbc
-```
-
-Setup Instructions
-------------------
-
-### Step 1: Configure your monitor computer
-
-Open the client computer and set your server IP:
-
-```
-set vbc.ip_server your_ip:4334  -- Replace your_ip with the actual IP of your VBC Server e.g. http://0.0.0.0:4334
-```
-
-
-### Step 2: Host your video
------
-## Option 1 (the easiest)
-Launch server.py and go to `your_ip:4334` (by default `http://localhost:4334`) and use the web UI to upload your videos.
-
-## Option 2
-Run the script via command line:
-
-```bash
-python3 convert.py -i path/to/your_video.mp4 -d 60 -f 10
-```
-
-Arguments:
-- `-i` / `--input`: Path to your video file (required).
-- `-d` / `--density`: Resolution scale for output frames (optional, default: 60).
-- `-f` / `--fps`: Target frame rate (optional, default: 7). 
-
-Example:
-```bash
-python3 convert.py -i funny_cat.mp4 -d 17 -f 7
-```
-
-Output
-------
-The script will create a folder inside `videos/` with a random ID name (e.g., `videos/abc123xyz`).
-This folder will contain:
-- `frame_00000.blt`, `frame_00001.blt`, etc. — All video frames converted to BLT.
-- `audio.dfpwm` — The audio stream converted to DFPWM.
-- `metadata.txt` — Contains:
-    - `fps=10`
-    - `frames=123`
-- The program will also give you the id of your video, keep it in mind !
-  (I will do a UI for the video upload/listing in the next major update)
-
-### Step 4: Start the server
-
-```bash
 python3 server.py
 ```
 
-### Step 5: Play a video
+Then open in your browser:  
+`http://your_ip:4334`  
+You can now upload videos directly from the web interface.
 
-From the client computer:
+***
 
+### ▶️ Client Commands
+
+There are two main client commands:
+
+- Play a video from the server:  
+  ```
+  vbc play video_id
+  ```
+
+- Download a video from a direct link:  
+  ```
+  vbc download mp4_link
+  ```
+
+To disable audio:  
 ```
-vbc <video_id>
+vbc play video_id no
 ```
 
-To disable audio:
+***
 
-```
-vbc <video_id> no
-```
-
-**Warning: The program does't support big audio file yet, so disable the audio for long video or your computer will crash !**
-
----
-
-Server Folder Structure
---------------------------------
-
-Each video will be structured like this:
+### 📁 Server Folder Structure
 
 ```
 videos/
@@ -133,26 +84,19 @@ videos/
 ```
 
 Example `metadata.txt`:
-
 ```
 fps=7
 frames=180
 ```
 
----
+***
 
-Notes
------
+### ⚠️ Important Notes
 
-- HTTP must be enabled in `ComputerCraft` config.
-- Rednet communication is used for remote audio control.
-- Monitor size should match the resolution of the video.
-- The playback client adjusts to your `fps` setting.
+- The HTTP API must be enabled in the ComputerCraft configuration.  
+- DFPWM audio is not yet optimized for long videos (disable it if the client crashes).  
+- The monitor size should match the video resolution for proper display.
 
----
+***
 
-License
--------
-
-MIT License — Free to use, modify, and distribute.
-
+Would you like me to adjust this version to match GitHub’s Markdown style with headers, links, and code formatting ready to publish?
