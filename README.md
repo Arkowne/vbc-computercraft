@@ -74,7 +74,7 @@ vbc play video_id no
 
 ### ⚠️ Important Notes
 
-- The HTTP API must be enabled in the ComputerCraft configuration.  
+- If you use a http:// ip in vbc.ip_server, the HTTP API must be enabled in the ComputerCraft configuration.  
 - DFPWM audio is not yet optimized for long videos (disable it if the client crashes).  
 - The monitor size should match the video resolution for proper display.
 
