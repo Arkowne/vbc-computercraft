@@ -8,6 +8,7 @@ import random
 import subprocess
 
 default_fps = 10
+default_force_full = 5
 
 def delete_png_in_folder(folder_path):
     folder = Path(folder_path)
@@ -48,7 +49,7 @@ if __name__ == "__main__":
     parser.add_argument("--width", type=int, help="Target width")
     parser.add_argument("--height", type=int, help="Target height")
     parser.add_argument("--fps", type=int, default=default_fps, help="Target FPS")
-    parser.add_argument("--force_full_every", type=int, default=10, help="Full frame every X frames")
+    parser.add_argument("--force_full_every", type=int, default=default_force_full, help="Full frame every X frames")
     args = parser.parse_args()
 
     id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
@@ -79,7 +80,7 @@ if __name__ == "__main__":
     with open(os.path.join(args.output_dir, 'lock.txt'), 'w') as m:
         m.write("") 
 
-def convert_main(input_path, video_id='', width=230, height=100, fps=default_fps, force_full_every=10):
+def convert_main(input_path, video_id='', width=230, height=100, fps=default_fps, force_full_every=default_force_full):
     if video_id == '':
         video_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
     output_dir = "videos/" + video_id + "/"
