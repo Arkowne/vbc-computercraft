@@ -74,7 +74,6 @@ To disable audio:
 vbc play video_id no
 ```
 
-***
 
 
 ***
