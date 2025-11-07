@@ -42,7 +42,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content)
         except Exception as e:
-            self.send_error(500, f"Erreur lecture index.html : {e}")
+            self.send_error(500, f"Error reading index.html: {e}")
 
     def serve_api_videos(self):
         videos = []
@@ -70,19 +70,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         line = self.rfile.readline()
         remain_bytes -= len(line)
         if boundary not in line:
-            self.send_error(400, "Content does not start with boundary")
+            self.send_error(400, "Data does not start with boundary")
             return
 
-        # Parse headers for file part
         line = self.rfile.readline()
         remain_bytes -= len(line)
         disposition = line.decode()
         if 'filename="' not in disposition:
-            self.send_error(400, "Can't find filename in disposition")
+            self.send_error(400, "Cannot find filename in disposition")
             return
         filename = disposition.split('filename="')[1].split('"')[0]
 
-        # Skip Content-Type line and empty line
         line = self.rfile.readline()
         remain_bytes -= len(line)
         line = self.rfile.readline()
@@ -108,12 +106,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if prev_line:
                     out.write(prev_line)
 
-        import sys
         sys_argv_backup = sys.argv
         try:
             convert_main(tmp_filename)
         except Exception as e:
-            self.send_error(500, f"Erreur lors de la conversion : {e}")
+            self.send_error(500, f"Error during conversion: {e}")
             os.remove(tmp_filename)
             sys.argv = sys_argv_backup
             return
@@ -126,16 +123,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({'status': 'ok'}).encode('utf-8'))
 
-
     def handle_download(self):
         try:
-            # Vérifier le Content-Type
             content_type = self.headers.get('Content-Type')
             if not content_type or 'application/json' not in content_type:
                 self.send_error(400, "Content-Type must be application/json")
                 return
 
-            # Lire le corps de la requête
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length)
             data = json.loads(body.decode('utf-8'))
@@ -145,35 +139,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             height = data.get('height')
 
             if not url:
-                self.send_error(400, "Paramètre 'url' manquant")
+                self.send_error(400, "Parameter 'url' missing.")
                 return
 
-            # Générer un ID unique et nom temporaire
             video_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
             tmp_filename = f"download_{video_id}.mp4"
 
-            # Répondre immédiatement au client avec l'ID
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({'status': 'ok', 'id': video_id}).encode('utf-8'))
 
-            # Lancer la conversion en arrière-plan
             def background_conversion(vid):
                 try:
-                    # Télécharger la vidéo
                     try:
                         urllib.request.urlretrieve(url, tmp_filename)
                     except Exception as e:
-                        print(f"Erreur téléchargement vidéo {video_id}: {e}")
+                        print(f"Error downloading video {video_id}: {e}")
                         return
 
-                    # Préparer sys.argv pour convert_main
                     sys_argv_backup = sys.argv
                     try:
                         convert_main(tmp_filename, vid, width=width, height=height)
                     except Exception as e:
-                        print(f"Erreur conversion vidéo {video_id}: {e}")
+                        print(f"Error converting video {video_id}: {e}")
                     finally:
                         sys.argv = sys_argv_backup
 
@@ -182,14 +171,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         os.remove(tmp_filename)
                         os.remove(f"temp_{video_id}.mp4")
                         with open("videos/" + vid + "/lock.txt", 'w') as f:
-                            f.write("")  # ou tu peux écrire "locked" ou autre
+                            f.write("")
 
             import threading
             threading.Thread(target=background_conversion, daemon=True, args=(video_id,)).start()
 
         except Exception as e:
-            self.send_error(500, f"Erreur lors du téléchargement : {e}")
-
+            self.send_error(500, f"Error during download request: {e}")
 
 
 if __name__ == '__main__':
@@ -197,3 +185,4 @@ if __name__ == '__main__':
     with socketserver.TCPServer(('', PORT), Handler) as httpd:
         print(f"Serving HTTP on port {PORT}")
         httpd.serve_forever()
+
