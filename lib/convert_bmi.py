@@ -78,7 +78,7 @@ if __name__ == "__main__":
         m.write(f"fps={args.fps}\nframes={count}\n")
 
     with open(os.path.join(args.output_dir, 'lock.txt'), 'w') as m:
-        m.write("") 
+        m.write("")
 
 def convert_main(input_path, video_id='', width=230, height=100, fps=default_fps, force_full_every=default_force_full):
     if video_id == '':

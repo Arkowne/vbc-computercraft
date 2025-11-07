@@ -38,4 +38,3 @@ for _, file_info in ipairs(files_to_download) do
 end
 
 print("All files have been downloaded!")
-
