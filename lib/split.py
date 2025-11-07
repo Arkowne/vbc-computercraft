@@ -7,16 +7,12 @@ import argparse
 import random
 
 def preprocess_video(input_path, output_path, width=None, height=None, fps=None, output_dir="oiia"):
-    v=input_path;f=cv2.VideoCapture(v);f.set(cv2.CAP_PROP_POS_FRAMES,random.randint(0,int(f.get(cv2.CAP_PROP_FRAME_COUNT))-1));_,i=f.read();cv2.imwrite(output_dir + "preview.jpg",i)
+    v=input_path; f=cv2.VideoCapture(v); f.set(cv2.CAP_PROP_POS_FRAMES, random.randint(0, int(f.get(cv2.CAP_PROP_FRAME_COUNT)) - 1)); _, i = f.read(); cv2.imwrite(output_dir + "preview.jpg", i)
     print("---------------------------------")
     print(output_dir)
     
-    """
-    Redimensionne la vidéo, met les barres noires si besoin, et change le FPS.
-    """
     vf_filters = []
     if width and height:
-        # Resize en conservant le ratio et ajout de padding noir
         vf_filters.append(
             f"scale=w={width}:h={height}:force_original_aspect_ratio=decrease:flags=lanczos,"
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,unsharp"
@@ -33,13 +29,7 @@ def preprocess_video(input_path, output_path, width=None, height=None, fps=None,
 
     subprocess.run(cmd, check=True)
 
-
-
 def extract_delta_frames(video_path, output_dir, force_full_every=10):
-    """
-    Convertit la vidéo en frames PNG delta (pixels modifiés par rapport à la frame précédente).
-    La première frame est toujours complète.
-    """
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
 
@@ -50,41 +40,34 @@ def extract_delta_frames(video_path, output_dir, force_full_every=10):
         if not ret:
             break
 
-        # Convertir BGR -> RGBA
         frame_rgba = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
-        # Initialiser alpha à 255 (opaque)
         frame_rgba[:, :, 3] = 255
 
-        # Appliquer delta uniquement si ce n'est pas la première frame
         if prev_frame is not None and frame_idx != 0 and (frame_idx % force_full_every != 0):
-            # Comparer avec la frame précédente pour créer le delta
             diff_mask = np.any(frame_rgba[:, :, :3] != prev_frame[:, :, :3], axis=2)
             frame_rgba[:, :, 3] = diff_mask.astype(np.uint8) * 255
-        # Sinon alpha reste 255 = frame complète (première frame et frames forcées)
 
-        # Sauvegarder PNG
         Image.fromarray(frame_rgba).save(os.path.join(output_dir, f"frame_{frame_idx:05}.png"))
 
         prev_frame = frame_rgba.copy()
         frame_idx += 1
 
     cap.release()
-    print(f"✅ {frame_idx} frames exportées dans {output_dir}")
-
+    print(f"✅ {frame_idx} frames exported to {output_dir}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True, help="Chemin de la vidéo source")
-    parser.add_argument("--temp", default="video_temp.mp4", help="Vidéo prétraitée")
-    parser.add_argument("--output_dir", default="frames", help="Dossier pour les frames PNG")
-    parser.add_argument("--width", type=int, help="Largeur cible")
-    parser.add_argument("--height", type=int, help="Hauteur cible")
-    parser.add_argument("--fps", type=int, default=15, help="FPS cible")
-    parser.add_argument("--force_full_every", type=int, default=10, help="Frame complète toutes les X frames")
+    parser.add_argument("--input", required=True, help="Path to the source video")
+    parser.add_argument("--temp", default="video_temp.mp4", help="Preprocessed video")
+    parser.add_argument("--output_dir", default="frames", help="Directory for PNG frames")
+    parser.add_argument("--width", type=int, help="Target width")
+    parser.add_argument("--height", type=int, help="Target height")
+    parser.add_argument("--fps", type=int, default=15, help="Target FPS")
+    parser.add_argument("--force_full_every", type=int, default=10, help="Full frame every X frames")
     args = parser.parse_args()
 
-    print("🎬 Prétraitement vidéo...")
+    print("🎬 Video preprocessing...")
     preprocess_video(args.input, args.temp, width=args.width, height=args.height, fps=args.fps, output_dir=args.output_dir)
 
-    print("🖼️ Extraction des frames delta...")
+    print("🖼️ Extracting delta frames...")
     extract_delta_frames(args.temp, args.output_dir, force_full_every=args.force_full_every)
