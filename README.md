@@ -88,4 +88,8 @@ vbc play video_id no
 
 ***
 
-Would you like me to adjust this version to match GitHub’s Markdown style with headers, links, and code formatting ready to publish?
+## 💡 Task for the V3.0
+- Create .exe, .app and .deb for video servers to make the installation easier.
+- Split .dfpwm in tinyer files for long-format videos.
+- Add a vbc replay to replay the last video played.
+- 
