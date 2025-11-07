@@ -21,7 +21,7 @@ This project lets you play videos inside [ComputerCraft](https://tweaked.cc/) us
 2. Download the client program:  
 
    ```
-   wget https://raw.githubusercontent.com/Arkowne/vbc-computercraft/refs/heads/main/Client/vbc.lua vbc
+   wget run https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/Client/install.lua
    ```
 
 3. Set your server IP address:  
@@ -30,7 +30,7 @@ This project lets you play videos inside [ComputerCraft](https://tweaked.cc/) us
    set vbc.ip_server your_ip:4334
    ```
 
-   Replace `your_ip` with your actual server address (e.g., `http://0.0.0.0:4334`).
+   Replace `your_ip` with your actual server address (e.g., `http://0.0.0.0:4334` if you are in localhost).
 
 ***
 
