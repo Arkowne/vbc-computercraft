@@ -48,12 +48,14 @@ You can now upload videos directly from the web interface.
 
 ***
 
-### Access the server's video list
+### ⚙️ Access the server's video list
 
 Enter your server aadress in your browser (e.g., `http://your_ip:4334`).
 From this page, you can see your video's and there id's.
 
 You can also directly upload .mp4, but the video will be resize for realy big screen (will be fixed in the next update).
+
+***
 
 ### ▶️ Client Commands
 
