@@ -77,7 +77,7 @@ if __name__ == "__main__":
         m.write(f"fps={args.fps}\nframes={count}\n")
 
     with open(os.path.join(args.output_dir, 'lock.txt'), 'w') as m:
-        m.write("")  # or write "locked" or something else
+        m.write("") 
 
 def convert_main(input_path, video_id='', width=230, height=100, fps=default_fps, force_full_every=10):
     if video_id == '':
@@ -112,5 +112,5 @@ def convert_main(input_path, video_id='', width=230, height=100, fps=default_fps
         m.write(f"fps={fps}\nframes={count}\n")
 
     with open(os.path.join(output_dir, 'lock.txt'), 'w') as m:
-        m.write("")  # or write "locked" or something else
+        m.write("")
     return video_id
