@@ -69,23 +69,6 @@ vbc play video_id no
 
 ***
 
-### 📁 Server Folder Structure
-
-```
-videos/
-└── <video_id>/
-    ├── frame_00000.blt
-    ├── frame_00001.blt
-    ├── ...
-    ├── audio.dfpwm
-    └── metadata.txt
-```
-
-Example `metadata.txt`:
-```
-fps=7
-frames=180
-```
 
 ***
 
