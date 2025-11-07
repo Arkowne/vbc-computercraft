@@ -32,6 +32,8 @@ This project lets you play videos inside [ComputerCraft](https://tweaked.cc/) us
 
    Replace `your_ip` with your actual server address (e.g., `http://0.0.0.0:4334` if you are in localhost).
 
+4. Add a monitor and a speaker (can work without but recommanded to correctly use VBC)
+
 ***
 
 ### 🖥️ Start the Server
@@ -85,6 +87,7 @@ vbc play video_id no
 - If you use a http:// ip in vbc.ip_server, the HTTP API must be enabled in the ComputerCraft configuration.  
 - DFPWM audio is not yet optimized for long videos (disable it if the client crashes).  
 - The monitor size should match the video resolution for proper display.
+- You should probably increase teh monitor size limit in your world's CC config.
 
 ***
 
