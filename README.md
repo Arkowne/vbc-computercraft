@@ -4,7 +4,8 @@
 
 This project lets you play videos inside [ComputerCraft](https://tweaked.cc/) using a server and a client connected to a monitor and a speaker.
 
-![Demo Video](https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/demo.mp4)
+
+[![Demo](https://raw.githubusercontent.com/username/repository/branch/path/to/thumbnail.jpg)](https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/demo.mp4)
 
 ***
 
