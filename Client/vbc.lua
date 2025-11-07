@@ -589,7 +589,7 @@ elseif command == "download" then
     end
 
 
-    shell.run("vbc_bmi", "play", videoId)
+    shell.run("vbc", "play", videoId)
     --print("Your video is now avaiable !")
     --print("--> vbc play", videoId)
 
