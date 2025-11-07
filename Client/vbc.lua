@@ -270,42 +270,47 @@ end
 
 
 function playVideo()
-    local i = 1
+    local i = 0
     local frameInterval = 1 / fps
-    elapsed = 0            -- temps écoulé réel
-    local lastTime = os.clock()  -- dernier timestamp pour incrémenter elapsed
+    local lastTime = os.clock()
+    elapsed = 0  -- ✅ Toujours défini dès le début
 
-    while i <= frames and programRunning do
+    -- Tant que le programme tourne et qu'il reste des frames
+    while i < frames and programRunning do
         local currentTime = os.clock()
         local dt = currentTime - lastTime
         lastTime = currentTime
 
         -- Pause globale
         while not isPlaying do
-            os.pullEvent()         -- attend n'importe quel événement
-            lastTime = os.clock()   -- reset pour ne pas incrémenter elapsed pendant la pause
+            os.pullEvent()
+            lastTime = os.clock()  -- Reset le timer pour éviter que le temps continue pendant la pause
         end
 
-        -- Incrémenter le temps écoulé uniquement si on joue
+        -- ✅ Incrémente seulement si on est en lecture
         elapsed = elapsed + dt
-        local expectedFrame = math.floor(elapsed * fps) + 1
 
-        -- Corrige le retard vidéo
+        -- Calcul de la frame attendue selon le temps écoulé
+        local expectedFrame = math.floor(elapsed * fps)
+
+        -- Corrige si la vidéo est en retard (optionnel)
         if expectedFrame > i then
             i = expectedFrame
         end
 
-        if i > frames then break end
+        if i >= frames then break end
 
         local index = string.format("%05d", i)
         local url = adress .. "/videos/" .. id .. "/frame_" .. index .. ".bmi"
         local path = "temp/frame_" .. index .. ".bmi"
 
+        -- Télécharge et affiche la frame
         if dl_image(url, path) and file_exists(path) then
             bmi.draw(path, {term = videoscreen})
             fs.delete(path)
         end
 
+        -- Affichage debug (optionnel)
         if args[3] == "debug" then
             local debugText = string.format(
                 "Frame: %d/%d | Temps: %.2fs | Sync: %.3fs",
@@ -317,34 +322,30 @@ function playVideo()
             write(debugText)
         end
 
+        -- Avance à la frame suivante
         i = i + 1
 
-        -- Synchronise la frame sur le temps réel de lecture
+        -- Synchronise avec le temps réel de lecture
         local nextFrameTime = i / fps
         local delay = nextFrameTime - elapsed
         if delay > 0 then sleep(delay) end
 
         drawTimer()
-        if isExternalMonitor then
 
-        else
+        -- Interface terminal (si pas d’écran externe)
+        if not isExternalMonitor then
             local width, height = term.getSize()
             term.setBackgroundColor(colors.orange)
             term.setTextColor(colors.black)
-            --paintutils.drawLine(1, height, width, height, colors.black)
-            term.setCursorPos(1, height-2)
-            if isPlaying then
-                term.write("Pause")
-            else
-                term.write("Start")
-            end
-            term.setCursorPos(1, height-1)
-            term.write("Stop")
+            term.setCursorPos(1, height - 2)
+            term.write(isPlaying and "Pause " or "Start ")
+            term.setCursorPos(1, height - 1)
+            term.write("Stop ")
             term.setCursorPos(1, height)
             term.write(formatTime(elapsed))
         end
     end
-    videoscreen.write("oiiaioiaiiai")
+
     programRunning = false
     endSession()
 end
@@ -589,7 +590,7 @@ elseif command == "download" then
     end
 
 
-    shell.run("vbc", "play", videoId)
+    shell.run("vbc_bmi", "play", videoId)
     --print("Your video is now avaiable !")
     --print("--> vbc play", videoId)
 
