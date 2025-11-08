@@ -2,8 +2,7 @@
 
 ### 🎞️ Video Block Converter – Simplified Installation
 
-This project lets you play videos inside [ComputerCraft](https://tweaked.cc/) using a server and a client connected to a monitor and a speaker.
-
+This project lets you play videos inside [ComputerCraft](https://tweaked.cc/) using a server and a client connected to a monitor and a speaker. If you have any questions, contact me on Discord @Arkowne !
 
 [![Demo](https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/assets/banner.png)](https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/demo.mp4)
 
