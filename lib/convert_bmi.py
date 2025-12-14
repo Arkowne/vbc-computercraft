@@ -8,7 +8,7 @@ import random
 import subprocess
 
 default_fps = 10
-default_force_full = 5
+default_force_full = 12
 
 def delete_png_in_folder(folder_path):
     folder = Path(folder_path)
