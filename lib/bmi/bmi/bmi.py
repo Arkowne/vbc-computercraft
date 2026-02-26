@@ -299,10 +299,17 @@ def unsharp_mask(image, sigma=1.0, amount=1.5, threshold=0):
     return np.clip(sharpened, 0, 255).astype(np.uint8)
 
 def quantize_nearest_vectorised(img_lab, keys_lab):
-    flat = img_lab.reshape((-1,3))
-    dists = np.linalg.norm(flat[:, None, :] - keys_lab[None, :, :], axis=2)
+    flat = img_lab.reshape(-1, 3)
+
+    # distance euclidienne au carré (sans sqrt)
+    dists = (
+        (flat[:, 0:1] - keys_lab[:, 0])**2 +
+        (flat[:, 1:2] - keys_lab[:, 1])**2 +
+        (flat[:, 2:3] - keys_lab[:, 2])**2
+    )
+
     indices_flat = np.argmin(dists, axis=1)
-    return indices_flat.reshape((img_lab.shape[0], img_lab.shape[1]))
+    return indices_flat.reshape(img_lab.shape[:2])
 
 def image_to_bmi_sparse(infile, outfile, width=None, height=None,
                         blur_sigma=0.5, contrast_alpha=1.5, contrast_beta=0,

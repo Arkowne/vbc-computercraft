@@ -7,6 +7,9 @@ import sys
 import random
 from lib.convert_bmi import convert_main
 import string
+import yt_dlp
+import shutil
+import subprocess
 
 PORT = 4334
 VIDEO_ROOT = 'videos'
@@ -58,70 +61,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def handle_upload(self):
-        content_type = self.headers.get('Content-Type')
-        if not content_type or 'multipart/form-data' not in content_type:
-            self.send_error(400, "Content-Type must be multipart/form-data")
-            return
-
-        boundary = content_type.split("boundary=")[-1].encode()
-        remain_bytes = int(self.headers['Content-Length'])
-
-        line = self.rfile.readline()
-        remain_bytes -= len(line)
-        if boundary not in line:
-            self.send_error(400, "Data does not start with boundary")
-            return
-
-        line = self.rfile.readline()
-        remain_bytes -= len(line)
-        disposition = line.decode()
-        if 'filename="' not in disposition:
-            self.send_error(400, "Cannot find filename in disposition")
-            return
-        filename = disposition.split('filename="')[1].split('"')[0]
-
-        line = self.rfile.readline()
-        remain_bytes -= len(line)
-        line = self.rfile.readline()
-        remain_bytes -= len(line)
-
-        tmp_filename = f"upload_{os.getpid()}.tmp"
-
-        with open(tmp_filename, 'wb') as out:
-            prev_line = None
-            while remain_bytes > 0:
-                line = self.rfile.readline()
-                remain_bytes -= len(line)
-                if boundary in line:
-                    if prev_line:
-                        if prev_line.endswith(b'\r\n'):
-                            prev_line = prev_line[:-2]
-                        out.write(prev_line)
-                    break
-                if prev_line:
-                    out.write(prev_line)
-                prev_line = line
-            else:
-                if prev_line:
-                    out.write(prev_line)
-
-        sys_argv_backup = sys.argv
-        try:
-            convert_main(tmp_filename)
-        except Exception as e:
-            self.send_error(500, f"Error during conversion: {e}")
-            os.remove(tmp_filename)
-            sys.argv = sys_argv_backup
-            return
-        sys.argv = sys_argv_backup
-
-        os.remove(tmp_filename)
-
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({'status': 'ok'}).encode('utf-8'))
 
     def handle_download(self):
         try:
@@ -143,7 +82,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
 
             video_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
-            tmp_filename = f"download_{video_id}.mp4"
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -152,26 +90,51 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
             def background_conversion(vid):
                 try:
-                    try:
-                        urllib.request.urlretrieve(url, tmp_filename)
-                    except Exception as e:
-                        print(f"Error downloading video {video_id}: {e}")
-                        return
+                    downloaded_file = None
+                    
+                    # YouTube ou autres plateformes
+                    if any(x in url.lower() for x in ['youtube.com', 'youtu.be', 'youtube-nocookie.com']):
+                        ydl_opts = {
+                            'format': 'best[ext=mp4]/best',
+                            'outtmpl': f'download_{video_id}.%(ext)s',
+                        }
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([url])
+                    
+                    # Trouver fichier téléchargé
+                    for ext in ['mp4', 'mkv', 'webm']:
+                        test_file = f"download_{video_id}.{ext}"
+                        if os.path.exists(test_file):
+                            downloaded_file = test_file
+                            break
+                    
+                    if not downloaded_file:
+                        # Fallback URL directe
+                        urllib.request.urlretrieve(url, f"download_{video_id}.mp4")
+                        downloaded_file = f"download_{video_id}.mp4"
 
+                    # Conversion
                     sys_argv_backup = sys.argv
                     try:
-                        convert_main(tmp_filename, vid, width=width, height=height)
-                    except Exception as e:
-                        print(f"Error converting video {video_id}: {e}")
+                        convert_main(downloaded_file, vid, width=width, height=height)
                     finally:
                         sys.argv = sys_argv_backup
 
+                except Exception as e:
+                    print(f"Error processing video {video_id}: {e}")
+                    return
+
                 finally:
-                    if os.path.exists(tmp_filename):
-                        os.remove(tmp_filename)
+                    # Nettoyage
+                    for ext in ['mp4', 'mkv', 'webm']:
+                        if os.path.exists(f"download_{video_id}.{ext}"):
+                            os.remove(f"download_{video_id}.{ext}")
+                    if os.path.exists(f"temp_{video_id}.mp4"):
                         os.remove(f"temp_{video_id}.mp4")
-                        with open("videos/" + vid + "/lock.txt", 'w') as f:
-                            f.write("")
+                    
+                    os.makedirs(f"videos/{vid}", exist_ok=True)
+                    with open(f"videos/{vid}/lock.txt", 'w') as f:
+                        f.write("")
 
             import threading
             threading.Thread(target=background_conversion, daemon=True, args=(video_id,)).start()
