@@ -4,3 +4,6 @@
 /env/
 **.DS_STORE
 /videos/
+/jobs/
+stream.py
+temp_**

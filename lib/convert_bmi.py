@@ -6,6 +6,9 @@ import string
 from pathlib import Path
 import random
 import subprocess
+import wave
+import dfpwm
+import math
 
 default_fps = 10
 default_force_full = 12
@@ -29,17 +32,37 @@ def delete_png_in_folder(folder_path):
 
     print(f"✅ All PNG files deleted in {folder_path}.")
 
-def extract_audio_to_dfpwm(input_path, output_path):
-    cmd = [
-        'ffmpeg', '-y', '-i', input_path,
-        '-vn', '-ac', '1', '-ar', '48000', '-c:a', 'dfpwm',
-        output_path
-    ]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def extract_audio_to_dfpwm(input_path, output_dir, segment_sec=30):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True)
+
+    # Step 1: Split to wav segments
+    wav_pattern = output_dir / "audio_%d.wav"
+    subprocess.run([
+        "ffmpeg", "-y",
+        "-i", str(input_path),
+        "-vn", "-ac", "1", "-ar", "48000",
+        "-f", "segment", "-segment_time", str(segment_sec),
+        "-reset_timestamps", "1",
+        str(wav_pattern)
+    ], check=True)
+
+    # Step 2: Encode each wav to dfpwm
+    for wav_file in output_dir.glob("audio_*.wav"):
+        dfpwm_file = wav_file.with_suffix(".dfpwm")
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-i", str(wav_file),
+            "-ac", "1", "-ar", "48000",
+            "-c:a", "dfpwm",
+            str(dfpwm_file)
+        ], check=True)
+        wav_file.unlink()  # remove the intermediate WAV
+
+    print("✅ Segmented and encoded to DFPWM!")
 
 def process_audio(input_path, output_dir):
-    out_audio = os.path.join(output_dir, 'audio.dfpwm')
-    extract_audio_to_dfpwm(input_path, out_audio)
+    extract_audio_to_dfpwm(input_path, output_dir)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

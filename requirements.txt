@@ -2,4 +2,5 @@ opencv-python
 Pillow
 nfp
 scikit-learn
-yt_dlp
+pytube
+dfpwm

@@ -1,16 +1,15 @@
-local bmi = require("bmi")  -- sans le ".lua"
+local bmi = require("bmi")
 
 local args = { ... }
-
--- === Mode DEBUG ===
 local debug = true
 
--- Initialise DFPWM
 local dfpwm = require("cc.audio.dfpwm")
 local decoder = dfpwm.make_decoder()
 
-function errorHandler(type, data)
+-- Remplace speaker unique par tableau de speakers
+local speakers = {}
 
+function errorHandler(type, data)
     if type == "cantDownloadAudio" then
         if urlExists(data) then
             error("Can't download audio : Unknown error.")
@@ -53,39 +52,31 @@ local function checksum(path)
 end
 
 function downloadAndInspect(url, destPath)
-    -- 1) Ouvrir la requÃÂªte HTTP
     local resp = http.get(url)
     if not resp then
-        return false, "ÃÂchec du tÃÂ©lÃÂ©chargement", nil, nil
+        return false, "Échec du téléchargement", nil, nil
     end
 
-    -- 2) Lire lÃ¢ÂÂenÃ¢ÂÂtÃÂªte Content-Length (nil si absent)
     local headers  = resp.getResponseHeaders()
     local declared = headers and tonumber(headers["Content-Length"])
 
-    -- 3) Lire tout le contenu
     local data = resp.readAll()
     resp.close()
 
-    -- 4) Sauvegarder sur le disque
     local f = fs.open(destPath, "wb")
     f.write(data)
     f.close()
 
-    -- 5) Mesurer la taille rÃÂ©elle
     local actualSize = fs.getSize(destPath)
 
-    -- 6) VÃÂ©rifier cohÃÂ©rence taille annoncÃÂ©e / rÃÂ©elle
     if declared and declared ~= actualSize then
-        -- avertissement, mais on continue pour le checksum
-        print(("Ã¢ÂÂ Ã¯Â¸Â Taille dÃÂ©clarÃÂ©e (%d) != taille rÃÂ©elle (%d)"):format(declared, actualSize))
+        print(("⚠️ Taille déclarée (%d) != taille réelle (%d)"):format(declared, actualSize))
     end
 
-    -- 7) Calculer le checksum
     local actualSum = checksum(destPath)
 
     return true,
-           "TÃÂ©lÃÂ©chargement et inspection terminÃÂ©s",
+           "Téléchargement et inspection terminés",
            actualSize,
            actualSum
 end
@@ -96,10 +87,10 @@ function dl_audio(url)
 
     local ok, msg, size, sum = downloadAndInspect(url, path)
     if ok then
-        print(("SuccÃÂ¨sÃ¢ÂÂ¯: taille = %d octets, checksum = %u"):format(size, sum))
+        print(("Succès: taille = %d octets, checksum = %u"):format(size, sum))
         return "succes"
     else
-        print("ErreurÃ¢ÂÂ¯: "..msg)
+        print("Erreur: "..msg)
         return "error"
     end
 end
@@ -155,20 +146,13 @@ function file_exists(path)
     end
 end
 
-
-function blockUntilSignal();
-    -- Bloque le programme tant qu'il n'y a pas de signal de redstone sous le PC
-    local side = "bottom"  -- côté à vérifier ("bottom", "top", "left", etc.)
-
+function blockUntilSignal()
+    local side = "bottom"
     print("En attente du signal de redstone sous le PC...")
-
-    -- Boucle infinie tant qu'il n'y a pas de signal
     while not redstone.getInput(side) do
-        sleep(0.1)  -- évite de saturer le CPU
+        sleep(0.1)
     end
-
     print("Signal détecté ! Le programme peut continuer.")
-    -- Ici tu peux mettre le reste de ton programme
 end
 
 function downloadVideo(serverip, url, width, height)
@@ -176,13 +160,11 @@ function downloadVideo(serverip, url, width, height)
         errorHandler("missingUrl")
     end
 
-    -- Préparer le corps JSON
     local body = { url = url }
     if width then body.width = width end
     if height then body.height = height end
     local jsonBody = textutils.serializeJSON(body)
 
-    -- Envoyer la requête POST au serveur Python
     local response = http.post(serverip, jsonBody, {
         ["Content-Type"] = "application/json"
     })
@@ -191,7 +173,6 @@ function downloadVideo(serverip, url, width, height)
         errorHandler("cantReachServer")
     end
 
-    -- Lire la réponse JSON
     local responseBody = response.readAll()
     response.close()
 
@@ -200,7 +181,6 @@ function downloadVideo(serverip, url, width, height)
         errorHandler("invalidServerResponse", tostring(responseBody))
     end
 
-    -- Retourner l'ID généré immédiatement
     return data.id
 end
 
@@ -216,41 +196,95 @@ function loadAudio()
     return chunks
 end
 
+-- NOUVELLE FONCTION: Jouer sur TOUS les speakers
+function playOnAllSpeakers(pcm)
+    local all_ok = true
+    for _, sp in ipairs(speakers) do
+        if not sp.playAudio(pcm) then
+            all_ok = false
+        end
+    end
+    return all_ok
+end
+
+-- NOUVELLE FONCTION: Arrêter TOUS les speakers
+function stopAllSpeakers()
+    for _, sp in ipairs(speakers) do
+        pcall(sp.stop)  -- pcall pour éviter les erreurs si un speaker est déconnecté
+    end
+end
 
 function playAudio()
     startTimeSound = os.clock()
     audioElapsed = 0
 
-    if isSpeaker == false then return end
+    if #speakers == 0 then return end
 
     local subChunkSize = 1024
-    local ci, offset = 1, 1
     local running = true
+    local index = 0
 
     local function audioThread()
-        while programRunning and ci <= #chunks do
-            if not isPlaying then
-                speaker.stop()
-                os.pullEvent()  -- attend n'importe quel event avant de reprendre
-            else
-                local c = chunks[ci]
-                if c then
-                    if offset > #c then
-                        ci = ci + 1
-                        offset = 1
-                    else
-                        local subChunk = c:sub(offset, offset + subChunkSize - 1)
-                        local pcm = decoder(subChunk)
-                        -- Attendre que le speaker ait de la place
-                        while not speaker.playAudio(pcm) do
-                            os.pullEvent("speaker_audio_empty")
-                        end
-                        offset = offset + subChunkSize
-                    end
+        while programRunning do
+            local url = adress .. "/videos/" .. id .. "/audio_" .. index .. ".dfpwm"
+            local path = "audio_" .. index .. ".dfpwm"
+
+            if not urlExists(url) then
+                break
+            end
+
+            local ok, msg, size, sum = downloadAndInspect(url, path)
+            if not ok then
+                errorHandler("errorWhileDownloading", url)
+                running = false
+                return
+            end
+
+            local h = fs.open(path, "rb")
+            local raw = h.readAll()
+            h.close()
+
+            local chunks, sizeChunk = {}, 16 * 1024
+            for i = 1, #raw, sizeChunk do
+                chunks[#chunks + 1] = raw:sub(i, i + sizeChunk - 1)
+            end
+
+            local ci, offset = 1, 1
+            while programRunning and ci <= #chunks do
+                if not isPlaying then
+                    stopAllSpeakers()
+                    repeat
+                        local event, param = os.pullEvent()
+                    until isPlaying or event == "terminate"
                 else
-                    ci = ci + 1
+                    local c = chunks[ci]
+                    if c then
+                        if offset > #c then
+                            ci = ci + 1
+                            offset = 1
+                        else
+                            local subChunk = c:sub(offset, offset + subChunkSize - 1)
+                            local pcm = decoder(subChunk)
+                            
+                            -- ATTENTE SYNCHRONISÉE MULTI-SPEAKERS
+                            local all_played
+                            repeat
+                                all_played = playOnAllSpeakers(pcm, 4.0)
+                                if not all_played then
+                                    os.pullEvent("speaker_audio_empty")
+                                end
+                            until all_played
+                            
+                            offset = offset + subChunkSize
+                        end
+                    else
+                        ci = ci + 1
+                    end
                 end
             end
+
+            fs.delete(path)
+            index = index + 1
         end
         running = false
     end
@@ -264,36 +298,28 @@ function playAudio()
         end
     end
 
-    -- Lancer le flux audio et la mise à jour du timer en parallèle
     parallel.waitForAny(audioThread, timerThread)
 end
-
 
 function playVideo()
     local i = 0
     local frameInterval = 1 / fps
     local lastTime = os.clock()
-    elapsed = 0  -- ✅ Toujours défini dès le début
+    elapsed = 0
 
-    -- Tant que le programme tourne et qu'il reste des frames
     while i < frames and programRunning do
         local currentTime = os.clock()
         local dt = currentTime - lastTime
         lastTime = currentTime
 
-        -- Pause globale
         while not isPlaying do
             os.pullEvent()
-            lastTime = os.clock()  -- Reset le timer pour éviter que le temps continue pendant la pause
+            lastTime = os.clock()
         end
 
-        -- ✅ Incrémente seulement si on est en lecture
         elapsed = elapsed + dt
-
-        -- Calcul de la frame attendue selon le temps écoulé
         local expectedFrame = math.floor(elapsed * fps)
 
-        -- Corrige si la vidéo est en retard (optionnel)
         if expectedFrame > i then
             i = expectedFrame
         end
@@ -304,13 +330,11 @@ function playVideo()
         local url = adress .. "/videos/" .. id .. "/frame_" .. index .. ".bmi"
         local path = "temp/frame_" .. index .. ".bmi"
 
-        -- Télécharge et affiche la frame
         if dl_image(url, path) and file_exists(path) then
             bmi.draw(path, {term = videoscreen})
             fs.delete(path)
         end
 
-        -- Affichage debug (optionnel)
         if args[3] == "debug" then
             local debugText = string.format(
                 "Frame: %d/%d | Temps: %.2fs | Sync: %.3fs",
@@ -322,17 +346,14 @@ function playVideo()
             write(debugText)
         end
 
-        -- Avance à la frame suivante
         i = i + 1
 
-        -- Synchronise avec le temps réel de lecture
         local nextFrameTime = i / fps
         local delay = nextFrameTime - elapsed
         if delay > 0 then sleep(delay) end
 
         drawTimer()
 
-        -- Interface terminal (si pas d’écran externe)
         if not isExternalMonitor then
             local width, height = term.getSize()
             term.setBackgroundColor(colors.orange)
@@ -350,17 +371,10 @@ function playVideo()
     endSession()
 end
 
-
-
-
-
--- Recuperationd de l'adress du serveur
 adress = settings.get("vbc.ip_server", true)
 fs.makeDir("temp")
 programRunning = true
 
-
--- VÃ©rification des arguments
 local command = args[1]
 if command == "play" then
     id = args[2]
@@ -371,30 +385,20 @@ if command == "play" then
         os.pullEvent()
         return
     else
-        --print(adress .. "/videos/" .. args[2] .. "/lock.txt")
         if not urlExists(adress .. "/videos/" .. args[2] .. "/lock.txt") then
             print("The video is not avaiable or not fully generated.")
             return
         end
     end
 
-
 elseif command == "download" then
     vid_adress = args[2]
     if not vid_adress:match("^https?://") then
         error("invalidUrl", vid_adress)
     end
-
-else
-    print("Veuillez entrer une commande valide. ")
-
 end
 
-
-
--- Trouve le moniteur et le configure
-
--- Trying to find external monitor
+-- DÉTECTION MULTI-SPEAKERS ✅
 local monitor = peripheral.find("monitor")
 isExternalMonitor = false
 if monitor then
@@ -404,38 +408,21 @@ if monitor then
     print("Screen connected")
     isExternalMonitor = true
 else
-    -- Sinon, on fait autre chose
     videoscreen = term
     print("No external screen found.")
-    -- Par exemple afficher un message dans la console du computer
 end
 
 local swidth, sheight = videoscreen.getSize()
 
-
-
+-- ✅ REMPLACÉ: Détection MULTIPLE speakers
 isSpeaker = false
 if args[3] ~= "no" and command == "play" then
-    speaker = peripheral.find("speaker")
-    if not speaker then
-        error("Can't find speaker")
+    speakers = { peripheral.find("speaker") }
+    if #speakers == 0 then
+        print("No speakers found - audio disabled")
     else
-        print("Speaker found !")
-        isSpeaker = True
-    end
-end
-
-
-
-
-
--- Telecharge l'audio
-if isSpeaker ~= false and command == "play" then
-    state = dl_audio(adress .. "/videos/" .. id .. "/audio.dfpwm")
-    if state == "error" then
-        errorHandler("cantDownloadAudio", adress .. "/videos/" .. id .. "/audio.dfpwm")
-    else
-        print("Audio telecharge.")
+        print("Speakers found: " .. #speakers)
+        isSpeaker = true
     end
 end
 
@@ -444,6 +431,7 @@ function endSession()
     videoscreen.clear()
     term.setBackgroundColour(colors.black)
     term.clear()
+    stopAllSpeakers()  -- ✅ ARRET MULTI-SPEAKERS
     drawFrame(term)
     term.setCursorPos(3, 3)
     term.setBackgroundColor(colors.orange)
@@ -453,35 +441,28 @@ function endSession()
     term.setCursorPos(1,1)
     os.pullEvent("mouse_click")
     term.clear()
-    
 end
 
 function formatTime(seconds)
     local h = math.floor(seconds / 3600)
     local m = math.floor((seconds % 3600) / 60)
     local s = math.floor(seconds % 60)
-    -- Format avec des zéros devant si nécessaire
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
 function drawFrame(s)
-    -- Couleur orange (à approximativement en ComputerCraft)
-    local orange = colors.orange or colors.orange or 0xFF8000 -- fallback si non défini
-    
+    local orange = colors.orange or 0xFF8000
     local largeur, hauteur = s.getSize()
     
     s.setBackgroundColor(orange)
     s.setCursorPos(1,1)
-    -- Dessiner les lignes horizontales du cadre
     paintutils.drawLine(1, 1, largeur, 1, colors.orange)
     paintutils.drawLine(1, 1, 1, hauteur, colors.orange)
     paintutils.drawLine(1, hauteur, largeur, hauteur, colors.orange)
-    paintutils.drawLine(largeur, 1, largeur, largeur, colors.orange)
-    --term.write(longueur, largeur)
+    paintutils.drawLine(largeur, 1, largeur, hauteur, colors.orange)
     
-    -- Remet la couleur de fond à blanc (ou autre couleur par défaut)
     s.setBackgroundColor(colors.black)
-    s.setCursorPos(2, 2) -- repositionne pour éviter d'écrire sur le cadre
+    s.setCursorPos(2, 2)
 end
 
 function drawTimer()
@@ -492,7 +473,6 @@ function drawTimer()
         term.write(formatTime(elapsed))
     end
 end
-
 
 function uiHandler()
     isPlaying = true
@@ -526,8 +506,6 @@ function uiHandler()
                 isPlaying = true
                 programRunning = false
             end
-
-            
         else
             local event, buttons, x, y = os.pullEvent("mouse_click")
             local width, height = term.getSize()
@@ -544,9 +522,15 @@ function uiHandler()
                 end
             end
         end
-
     end
+end
 
+function youtubeSearchUI()
+    if not http then
+        print("HTTP non activé ! activez http.enable() dans CC: Tweaked")
+        return
+    end
+    drawFrame(term)
 end
 
 if command == "play" then
@@ -566,13 +550,15 @@ if command == "play" then
     startTimeSound = 0
     chunks = loadAudio()
     
+    if args[3] ~= "replay" then
+        shell.run("set vbc.last_played " .. args[2])
+    end
+    term.clear()
     parallel.waitForAll(playAudio, playVideo, uiHandler)
 
 elseif command == "download" then
     print(vid_adress)
     local monitor = peripheral.wrap("right")  
-
-    -- Obtenir la taille en caractères
     local monwidth, monheight = videoscreen.getSize()
 
     local videoId = downloadVideo(adress .. "/download", vid_adress, monwidth, monheight)
@@ -589,14 +575,10 @@ elseif command == "download" then
         blockUntilSignal()
     end
 
-
     shell.run("vbc.lua", "play", videoId)
-    --print("Your video is now avaiable !")
-    --print("--> vbc play", videoId)
 
+elseif command == "replay" then
+    shell.run("vbc.lua", "play", settings.get("vbc.last_played", "replay"))
+else
+    youtubeSearchUI()
 end
-
-
-
-
-
