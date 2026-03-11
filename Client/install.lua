@@ -6,7 +6,8 @@
 -- Define URLs and local save paths
 local files_to_download = {
     {url = "https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/Client/vbc.lua", path = "vbc.lua"},
-    {url = "https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/Client/bmi.lua", path = "bmi.lua"}
+    {url = "https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/Client/bmi.lua", path = "bmi.lua"},
+    {url = "https://github.com/Arkowne/vbc-computercraft/raw/refs/heads/main/Client/stream.lua", path = "stream.lua"}
 }
 
 -- Function to download a file

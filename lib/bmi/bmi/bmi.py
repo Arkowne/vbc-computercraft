@@ -3,7 +3,8 @@ import os
 import numpy as np
 import struct
 import argparse
-
+import struct
+import io
 
 COLOR_MAP = {
     (240, 240, 240): ("/127", '0', '0'),
@@ -386,6 +387,77 @@ def image_to_bmi_sparse(infile, outfile, width=None, height=None,
     if not silent:
         print(f"✅ Fichier .bmi généré : {outfile} ({width}x{height})")
 
+def image_array_to_bmi_bytes(img, width=None, height=None,
+                             blur_sigma=0.5, contrast_alpha=1.5, contrast_beta=0,
+                             unsharp_sigma=1.0, unsharp_amount=1.5, unsharp_threshold=0):
+
+    if img is None:
+        raise ValueError("Image invalide")
+
+    # ImageGrab/PIL -> déjà RGB
+    rgb = img[:, :, :3]
+
+    alpha_channel = np.full((img.shape[0], img.shape[1]), 255, dtype=np.uint8)
+
+    h0, w0, _ = rgb.shape
+    aspect = w0 / h0
+
+    if width and not height:
+        height = int(width / aspect)
+    elif height and not width:
+        width = int(height * aspect)
+    elif not width and not height:
+        width, height = w0, h0
+
+    if blur_sigma > 0:
+        rgb = cv2.GaussianBlur(rgb, (3,3), blur_sigma)
+
+    resized = cv2.resize(rgb, (width, height), interpolation=cv2.INTER_AREA)
+    alpha_resized = cv2.resize(alpha_channel, (width, height), interpolation=cv2.INTER_AREA)
+
+    contrasted = enhance_contrast(resized, alpha=contrast_alpha, beta=contrast_beta)
+    sharpened = unsharp_mask(contrasted, sigma=unsharp_sigma, amount=unsharp_amount, threshold=unsharp_threshold)
+
+    lab = cv2.cvtColor(sharpened, cv2.COLOR_RGB2LAB).astype(np.float32)
+    indices = quantize_nearest_vectorised(lab, _keys_lab)
+
+    import io, struct
+    buffer = io.BytesIO()
+    buffer.write(struct.pack(">HH", width, height))
+
+    bit_buffer = 0
+    bits_in_buffer = 0
+
+    def write_bit(bit):
+        nonlocal bit_buffer, bits_in_buffer
+        bit_buffer = (bit_buffer << 1) | (bit & 1)
+        bits_in_buffer += 1
+        if bits_in_buffer == 8:
+            buffer.write(bytes([bit_buffer]))
+            bit_buffer = 0
+            bits_in_buffer = 0
+
+    for y in range(height):
+        for x in range(width):
+
+            write_bit(0)
+
+            _, bg_hex, fg_hex = _VALS[indices[y, x]]
+
+            bg = int(bg_hex, 16)
+            fg = int(fg_hex, 16)
+
+            for shift in (3,2,1,0):
+                write_bit((bg >> shift) & 1)
+
+            for shift in (3,2,1,0):
+                write_bit((fg >> shift) & 1)
+
+    if bits_in_buffer > 0:
+        bit_buffer <<= (8 - bits_in_buffer)
+        buffer.write(bytes([bit_buffer]))
+
+    return buffer.getvalue()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

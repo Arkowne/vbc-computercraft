@@ -5,5 +5,5 @@
 **.DS_STORE
 /videos/
 /jobs/
-stream.py
 temp_**
+/bmi/
