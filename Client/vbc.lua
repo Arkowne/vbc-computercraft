@@ -579,6 +579,8 @@ elseif command == "download" then
 
 elseif command == "replay" then
     shell.run("vbc.lua", "play", settings.get("vbc.last_played", "replay"))
+elseif command == "stream" then
+    shell.run("stream.lua")
 else
-    youtubeSearchUI()
+    --youtubeSearchUI()
 end
