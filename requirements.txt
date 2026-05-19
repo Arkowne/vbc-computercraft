@@ -4,3 +4,4 @@ nfp
 scikit-learn
 pytube
 dfpwm
+yt_dlp
