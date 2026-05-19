@@ -95,5 +95,5 @@ vbc play video_id no
 
 ## 💡 Task for the V3.0
 - Create .exe, .app and .deb for video servers to make the installation easier.
-- -Split .dfpwm in tinyer files for long-format videos.-
-- -Add a vbc replay to replay the last video played.-
+- ~~Split .dfpwm in tinyer files for long-format videos.~~
+- ~~Add a vbc replay to replay the last video played.~~
