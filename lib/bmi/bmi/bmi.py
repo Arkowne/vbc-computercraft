@@ -4,6 +4,7 @@ import numpy as np
 import struct
 import argparse
 import io
+import av
 from scipy.spatial import KDTree
 
 COLOR_MAP = {
@@ -462,18 +463,51 @@ def _build_bmi_bytes(sharpened, alpha_resized, width, height):
 
 # ── API publique ──────────────────────────────────────────────────────────────
 
+def _load_input_with_pyav(infile):
+    """
+    Essaie d'abord PyAV.
+    - Si c'est une vidéo : prend la première frame.
+    - Si PyAV échoue : fallback OpenCV (pour garder la compatibilité avec les images).
+    Retourne (rgb, alpha) en uint8.
+    """
+    try:
+        container = av.open(infile)
+        try:
+            frame = next(container.decode(video=0), None)
+            if frame is not None:
+                rgba = frame.to_ndarray(format="rgba")  # HxWx4
+                rgb = rgba[:, :, :3]
+                alpha = rgba[:, :, 3]
+                return rgb, alpha
+        finally:
+            container.close()
+    except av.AVError:
+        pass
+
+    # Fallback image classique
+    img = cv2.imread(infile, cv2.IMREAD_UNCHANGED)
+    if img is None:
+        raise IOError(f"Impossible de charger {infile}")
+
+    if img.ndim == 2:
+        rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        alpha = np.full(img.shape, 255, dtype=np.uint8)
+    elif img.shape[2] == 4:
+        rgb = cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2RGB)
+        alpha = img[:, :, 3]
+    else:
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        alpha = np.full(img.shape[:2], 255, dtype=np.uint8)
+
+    return rgb, alpha
+
+
 def image_to_bmi_sparse(infile, outfile, width=None, height=None,
                         blur_sigma=0.5, contrast_alpha=1.5, contrast_beta=0,
                         unsharp_sigma=1.0, unsharp_amount=1.5, unsharp_threshold=0,
                         silent=False):
 
-    img = cv2.imread(infile, cv2.IMREAD_UNCHANGED)
-    if img is None:
-        raise IOError(f"Impossible de charger {infile}")
-
-    rgb = cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2RGB)
-    alpha_channel = (img[:, :, 3] if img.shape[2] == 4
-                     else np.full(img.shape[:2], 255, dtype=np.uint8))
+    rgb, alpha_channel = _load_input_with_pyav(infile)
 
     sharpened, alpha_resized, width, height = _preprocess(
         rgb, alpha_channel, width, height,
