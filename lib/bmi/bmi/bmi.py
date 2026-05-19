@@ -3,8 +3,8 @@ import os
 import numpy as np
 import struct
 import argparse
-import struct
 import io
+from scipy.spatial import KDTree
 
 COLOR_MAP = {
     (240, 240, 240): ("/127", '0', '0'),
@@ -264,6 +264,7 @@ COLOR_MAP = {
     (110, 46, 46): ("/127", 'f', 'e'),
     (17, 17, 17): ("/127", 'f', 'f'),
 }
+
 COLOR_MAP_DEFAULT = {
     (240, 240, 240): ("/127", "0", "0"),
     (242, 178,  51): ("/127", "1", "1"),
@@ -283,197 +284,249 @@ COLOR_MAP_DEFAULT = {
     ( 17,  17,  17): ("/127", "f", "f"),
 }
 
-_KEYS = np.array(list(COLOR_MAP.keys()), dtype=np.float32)
+# ── Structures pré-calculées (init unique au chargement du module) ──────────
 _VALS = list(COLOR_MAP.values())
-_keys_rgb_uint8 = _KEYS.reshape((-1,1,3)).astype(np.uint8)
-_keys_lab = cv2.cvtColor(_keys_rgb_uint8, cv2.COLOR_RGB2LAB).reshape((-1,3))
+_KEYS = np.array(list(COLOR_MAP.keys()), dtype=np.float32)
+
+# Conversion LAB des clés couleur (pour la quantification)
+_keys_rgb_uint8 = _KEYS.reshape((-1, 1, 3)).astype(np.uint8)
+_keys_lab = cv2.cvtColor(_keys_rgb_uint8, cv2.COLOR_RGB2LAB).reshape((-1, 3)).astype(np.float32)
+
+# KDTree pour la recherche du plus proche voisin en O(N·log K)
+_KDTREE = KDTree(_keys_lab)
+
+# Tableaux bg/fg pré-calculés : évite int(hex,16) à chaque pixel
+_BG = np.array([int(v[1], 16) for v in _VALS], dtype=np.uint8)
+_FG = np.array([int(v[2], 16) for v in _VALS], dtype=np.uint8)
+
+
+# ── Helpers image ────────────────────────────────────────────────────────────
 
 def enhance_contrast(image, alpha=1.5, beta=0):
     return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
 
+
 def unsharp_mask(image, sigma=1.0, amount=1.5, threshold=0):
-    blurred = cv2.GaussianBlur(image, (0,0), sigma)
+    blurred = cv2.GaussianBlur(image, (0, 0), sigma)
     sharpened = cv2.addWeighted(image, 1.0 + amount, blurred, -amount, 0)
     if threshold > 0:
         low_contrast = np.abs(image.astype(np.int16) - blurred.astype(np.int16)) < threshold
         sharpened[low_contrast] = image[low_contrast]
     return np.clip(sharpened, 0, 255).astype(np.uint8)
 
-def quantize_nearest_vectorised(img_lab, keys_lab):
-    flat = img_lab.reshape(-1, 3)
 
-    # distance euclidienne au carré (sans sqrt)
-    dists = (
-        (flat[:, 0:1] - keys_lab[:, 0])**2 +
-        (flat[:, 1:2] - keys_lab[:, 1])**2 +
-        (flat[:, 2:3] - keys_lab[:, 2])**2
-    )
+# ── Quantification vectorisée via KDTree ─────────────────────────────────────
 
-    indices_flat = np.argmin(dists, axis=1)
+def quantize_nearest_vectorised(img_lab):
+    """Retourne un tableau 2D d'indices dans COLOR_MAP."""
+    flat = img_lab.reshape(-1, 3).astype(np.float32)
+    _, indices_flat = _KDTREE.query(flat, workers=-1)   # multithread automatique
     return indices_flat.reshape(img_lab.shape[:2])
+
+
+# ── Encodage bit-stream vectorisé ────────────────────────────────────────────
+
+def _encode_to_bitstream(indices_2d, alpha_2d):
+    """
+    Encode l'image quantifiée en flux de bits BMI.
+
+    Format par pixel :
+      - pixel transparent (alpha < 128) : 1 bit  → '1'
+      - pixel actif                      : 9 bits → '0' + 4 bits bg + 4 bits fg
+
+    Retourne bytes (sans l'entête width/height).
+    """
+    h, w = indices_2d.shape
+    flat_idx   = indices_2d.flatten()          # (N,)
+    flat_alpha = alpha_2d.flatten()            # (N,)
+    N = len(flat_idx)
+
+    skip   = flat_alpha < 128                  # booléen (N,)
+    active = ~skip
+
+    bg = _BG[flat_idx]                         # (N,) valeurs 0-15
+    fg = _FG[flat_idx]                         # (N,)
+
+    # ── Construire le tableau de bits ────────────────────────────────────────
+    # Pire cas : N pixels × 9 bits chacun
+    bits = np.zeros(N * 9, dtype=np.uint8)
+
+    base = np.arange(N, dtype=np.int64) * 9
+
+    # Pixels transparents : bit 0 = 1, les 8 suivants restent 0 (inutilisés)
+    bits[base[skip]] = 1
+
+    # Pixels actifs : bit 0 = 0 (déjà 0), bits 1-4 = bg MSB→LSB, bits 5-8 = fg
+    base_a = base[active]
+    bg_a   = bg[active].astype(np.uint8)
+    fg_a   = fg[active].astype(np.uint8)
+
+    for shift, offset in zip((3, 2, 1, 0), (1, 2, 3, 4)):
+        bits[base_a + offset] = (bg_a >> shift) & 1
+    for shift, offset in zip((3, 2, 1, 0), (5, 6, 7, 8)):
+        bits[base_a + offset] = (fg_a >> shift) & 1
+
+    # ── Calcul de la longueur réelle du flux ─────────────────────────────────
+    # pixels transparents : 1 bit,  pixels actifs : 9 bits
+    n_bits = int(skip.sum()) * 1 + int(active.sum()) * 9
+
+    # Construire le flux compacté sans les bits inutilisés des pixels skip
+    # Pour éviter une boucle Python, on repack directement avec np.packbits
+    # après avoir retiré les zéros de rembourrage des pixels skip.
+    # Stratégie : reconstruire un flux dense sans trous.
+    real_bits = np.empty(n_bits, dtype=np.uint8)
+    pos = 0
+    # Vecteurisation par bloc de pixels (skip = 1 bit, active = 9 bits)
+    # On reconstruit le flux dense en NumPy grâce aux masques.
+
+    # Indices de pixels dans l'ordre raster
+    skip_mask   = skip
+    active_mask = active
+
+    # Bits des pixels skip (juste le bit '1')
+    skip_bits = np.ones(int(skip.sum()), dtype=np.uint8)
+
+    # Bits des pixels actifs (9 bits chacun, déjà dans `bits`)
+    active_indices = np.where(active_mask)[0]
+    # Récupérer les 9 bits de chaque pixel actif
+    active_base = base[active_indices]
+    # Forme (n_active, 9)
+    active_bits_matrix = bits[active_base[:, None] + np.arange(9)]  # broadcasting
+
+    # Reconstruire le flux ordonné pixel par pixel
+    # On crée un tableau d'objets indiquant pour chaque pixel sa contribution
+    # puis on les concatène dans l'ordre.
+    pixel_order = np.arange(N)
+    skip_pos   = np.where(skip_mask)[0]
+    active_pos = np.where(active_mask)[0]
+
+    # Construire un tableau de tailles : 1 pour skip, 9 pour active
+    sizes = np.where(skip_mask, 1, 9)
+    offsets = np.concatenate([[0], np.cumsum(sizes)[:-1]])
+
+    # Remplir real_bits
+    real_bits = np.zeros(n_bits, dtype=np.uint8)
+    # skip pixels
+    real_bits[offsets[skip_pos]] = 1
+    # active pixels : 9 bits
+    act_off = offsets[active_pos]  # (n_active,)
+    for k in range(9):
+        real_bits[act_off + k] = active_bits_matrix[:, k]
+
+    # Padding à un multiple de 8 et packbits
+    pad = (8 - n_bits % 8) % 8
+    if pad:
+        real_bits = np.concatenate([real_bits, np.zeros(pad, dtype=np.uint8)])
+
+    return np.packbits(real_bits).tobytes()
+
+
+# ── Pipeline commun ───────────────────────────────────────────────────────────
+
+def _preprocess(rgb, alpha_channel, width, height,
+                blur_sigma, contrast_alpha, contrast_beta,
+                unsharp_sigma, unsharp_amount, unsharp_threshold):
+    """Redimensionne, filtre, contraste, netteté → retourne (sharpened_rgb, alpha_resized)."""
+    h0, w0 = rgb.shape[:2]
+    aspect = w0 / h0
+
+    if width and not height:
+        height = int(width / aspect)
+    elif height and not width:
+        width = int(height * aspect)
+    elif not width and not height:
+        width, height = w0, h0
+
+    if blur_sigma > 0:
+        rgb          = cv2.GaussianBlur(rgb,          (3, 3), blur_sigma)
+        alpha_channel = cv2.GaussianBlur(alpha_channel, (3, 3), blur_sigma)
+
+    resized      = cv2.resize(rgb,          (width, height), interpolation=cv2.INTER_AREA)
+    alpha_resized = cv2.resize(alpha_channel, (width, height), interpolation=cv2.INTER_AREA)
+
+    contrasted = enhance_contrast(resized, alpha=contrast_alpha, beta=contrast_beta)
+    sharpened  = unsharp_mask(contrasted, sigma=unsharp_sigma,
+                               amount=unsharp_amount, threshold=unsharp_threshold)
+    return sharpened, alpha_resized, width, height
+
+
+def _build_bmi_bytes(sharpened, alpha_resized, width, height):
+    """Quantifie et encode → retourne les bytes BMI complets (avec entête)."""
+    lab     = cv2.cvtColor(sharpened, cv2.COLOR_RGB2LAB).astype(np.float32)
+    indices = quantize_nearest_vectorised(lab)
+
+    header  = struct.pack(">HH", width, height)
+    payload = _encode_to_bitstream(indices, alpha_resized)
+    return header + payload
+
+
+# ── API publique ──────────────────────────────────────────────────────────────
 
 def image_to_bmi_sparse(infile, outfile, width=None, height=None,
                         blur_sigma=0.5, contrast_alpha=1.5, contrast_beta=0,
-                        unsharp_sigma=1.0, unsharp_amount=1.5, unsharp_threshold=0, silent=False):
+                        unsharp_sigma=1.0, unsharp_amount=1.5, unsharp_threshold=0,
+                        silent=False):
 
     img = cv2.imread(infile, cv2.IMREAD_UNCHANGED)
     if img is None:
         raise IOError(f"Impossible de charger {infile}")
-    rgb = cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2RGB) if img.shape[2] >= 3 else img[:, :, :3]
-    alpha_channel = img[:, :, 3] if img.shape[2] == 4 else np.full((img.shape[0], img.shape[1]), 255, dtype=np.uint8)
 
-    h0, w0, _ = rgb.shape
-    aspect = w0 / h0
-    if width and not height:
-        height = int(width / aspect)
-    elif height and not width:
-        width = int(height * aspect)
-    elif not width and not height:
-        width, height = w0, h0
+    rgb = cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2RGB)
+    alpha_channel = (img[:, :, 3] if img.shape[2] == 4
+                     else np.full(img.shape[:2], 255, dtype=np.uint8))
 
-    if blur_sigma > 0:
-        rgb = cv2.GaussianBlur(rgb, (3,3), blur_sigma)
-        alpha_channel = cv2.GaussianBlur(alpha_channel, (3,3), blur_sigma)
+    sharpened, alpha_resized, width, height = _preprocess(
+        rgb, alpha_channel, width, height,
+        blur_sigma, contrast_alpha, contrast_beta,
+        unsharp_sigma, unsharp_amount, unsharp_threshold,
+    )
 
-    resized = cv2.resize(rgb, (width, height), interpolation=cv2.INTER_AREA)
-    alpha_resized = cv2.resize(alpha_channel, (width, height), interpolation=cv2.INTER_AREA)
-
-    contrasted = enhance_contrast(resized, alpha=contrast_alpha, beta=contrast_beta)
-    sharpened = unsharp_mask(contrasted, sigma=unsharp_sigma, amount=unsharp_amount, threshold=unsharp_threshold)
-
-    lab = cv2.cvtColor(sharpened, cv2.COLOR_RGB2LAB).astype(np.float32)
-    indices = quantize_nearest_vectorised(lab, _keys_lab)
+    data = _build_bmi_bytes(sharpened, alpha_resized, width, height)
 
     os.makedirs(os.path.dirname(outfile) or ".", exist_ok=True)
-
-    # Écriture bit-à-bit optimisée
     with open(outfile, "wb") as f:
-        f.write(struct.pack(">HH", width, height))  # header
-
-        buffer = 0
-        bits_in_buffer = 0
-
-        def write_bit(bit):
-            nonlocal buffer, bits_in_buffer
-            buffer = (buffer << 1) | (bit & 1)
-            bits_in_buffer += 1
-            if bits_in_buffer == 8:
-                f.write(bytes([buffer]))
-                buffer = 0
-                bits_in_buffer = 0
-
-        for y in range(height):
-            for x in range(width):
-                if alpha_resized[y, x] < 128:
-                    # pixel skip → 1
-                    write_bit(1)
-                else:
-                    # pixel actif → 0
-                    write_bit(0)
-                    _, bg_hex, fg_hex = _VALS[indices[y, x]]
-                    bg = int(bg_hex, 16)
-                    fg = int(fg_hex, 16)
-                    # écrire 4 bits bg et 4 bits fg
-                    for shift in (3,2,1,0):
-                        write_bit((bg >> shift) & 1)
-                    for shift in (3,2,1,0):
-                        write_bit((fg >> shift) & 1)
-
-        # flush final
-        if bits_in_buffer > 0:
-            buffer <<= (8 - bits_in_buffer)
-            f.write(bytes([buffer]))
+        f.write(data)
 
     if not silent:
         print(f"✅ Fichier .bmi généré : {outfile} ({width}x{height})")
 
-def image_array_to_bmi_bytes(img, width=None, height=None,
-                             blur_sigma=0.5, contrast_alpha=1.5, contrast_beta=0,
-                             unsharp_sigma=1.0, unsharp_amount=1.5, unsharp_threshold=0):
 
+def image_array_to_bmi_bytes(img, width=None, height=None,
+                              blur_sigma=0.5, contrast_alpha=1.5, contrast_beta=0,
+                              unsharp_sigma=1.0, unsharp_amount=1.5, unsharp_threshold=0):
     if img is None:
         raise ValueError("Image invalide")
 
-    # ImageGrab/PIL -> déjà RGB
-    rgb = img[:, :, :3]
+    rgb           = img[:, :, :3]
+    alpha_channel = np.full(img.shape[:2], 255, dtype=np.uint8)
 
-    alpha_channel = np.full((img.shape[0], img.shape[1]), 255, dtype=np.uint8)
+    sharpened, alpha_resized, width, height = _preprocess(
+        rgb, alpha_channel, width, height,
+        blur_sigma, contrast_alpha, contrast_beta,
+        unsharp_sigma, unsharp_amount, unsharp_threshold,
+    )
 
-    h0, w0, _ = rgb.shape
-    aspect = w0 / h0
+    return _build_bmi_bytes(sharpened, alpha_resized, width, height)
 
-    if width and not height:
-        height = int(width / aspect)
-    elif height and not width:
-        width = int(height * aspect)
-    elif not width and not height:
-        width, height = w0, h0
 
-    if blur_sigma > 0:
-        rgb = cv2.GaussianBlur(rgb, (3,3), blur_sigma)
-
-    resized = cv2.resize(rgb, (width, height), interpolation=cv2.INTER_AREA)
-    alpha_resized = cv2.resize(alpha_channel, (width, height), interpolation=cv2.INTER_AREA)
-
-    contrasted = enhance_contrast(resized, alpha=contrast_alpha, beta=contrast_beta)
-    sharpened = unsharp_mask(contrasted, sigma=unsharp_sigma, amount=unsharp_amount, threshold=unsharp_threshold)
-
-    lab = cv2.cvtColor(sharpened, cv2.COLOR_RGB2LAB).astype(np.float32)
-    indices = quantize_nearest_vectorised(lab, _keys_lab)
-
-    import io, struct
-    buffer = io.BytesIO()
-    buffer.write(struct.pack(">HH", width, height))
-
-    bit_buffer = 0
-    bits_in_buffer = 0
-
-    def write_bit(bit):
-        nonlocal bit_buffer, bits_in_buffer
-        bit_buffer = (bit_buffer << 1) | (bit & 1)
-        bits_in_buffer += 1
-        if bits_in_buffer == 8:
-            buffer.write(bytes([bit_buffer]))
-            bit_buffer = 0
-            bits_in_buffer = 0
-
-    for y in range(height):
-        for x in range(width):
-
-            write_bit(0)
-
-            _, bg_hex, fg_hex = _VALS[indices[y, x]]
-
-            bg = int(bg_hex, 16)
-            fg = int(fg_hex, 16)
-
-            for shift in (3,2,1,0):
-                write_bit((bg >> shift) & 1)
-
-            for shift in (3,2,1,0):
-                write_bit((fg >> shift) & 1)
-
-    if bits_in_buffer > 0:
-        bit_buffer <<= (8 - bits_in_buffer)
-        buffer.write(bytes([bit_buffer]))
-
-    return buffer.getvalue()
+# ── CLI ───────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True, help="Image source")
-    parser.add_argument("--output", required=True, help=".bmi de sortie")
-    parser.add_argument("--width", type=int)
-    parser.add_argument("--height", type=int)
-    parser.add_argument("--blur_sigma", type=float, default=0.5)
-    parser.add_argument("--contrast_alpha", type=float, default=1.5)
-    parser.add_argument("--contrast_beta", type=float, default=0)
-    parser.add_argument("--unsharp_sigma", type=float, default=1.0)
-    parser.add_argument("--unsharp_amount", type=float, default=1.5)
-    parser.add_argument("--unsharp_threshold", type=float, default=0.0)
+    parser.add_argument("--input",            required=True,        help="Image source")
+    parser.add_argument("--output",           required=True,        help=".bmi de sortie")
+    parser.add_argument("--width",            type=int)
+    parser.add_argument("--height",           type=int)
+    parser.add_argument("--blur_sigma",       type=float, default=0.5)
+    parser.add_argument("--contrast_alpha",   type=float, default=1.5)
+    parser.add_argument("--contrast_beta",    type=float, default=0)
+    parser.add_argument("--unsharp_sigma",    type=float, default=1.0)
+    parser.add_argument("--unsharp_amount",   type=float, default=1.5)
+    parser.add_argument("--unsharp_threshold",type=float, default=0.0)
     args = parser.parse_args()
 
-    image_to_bmi_sparse(args.input, args.output, args.width, args.height,
-                        args.blur_sigma, args.contrast_alpha, args.contrast_beta,
-                        args.unsharp_sigma, args.unsharp_amount, args.unsharp_threshold)
-
+    image_to_bmi_sparse(
+        args.input, args.output, args.width, args.height,
+        args.blur_sigma, args.contrast_alpha, args.contrast_beta,
+        args.unsharp_sigma, args.unsharp_amount, args.unsharp_threshold,
+    )
