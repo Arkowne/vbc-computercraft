@@ -9,6 +9,8 @@ import subprocess
 import wave
 import dfpwm
 import math
+import av
+import numpy as np
 
 default_fps = 10
 default_force_full = 12
@@ -32,34 +34,120 @@ def delete_png_in_folder(folder_path):
 
     print(f"✅ All PNG files deleted in {folder_path}.")
 
+
+
+
 def extract_audio_to_dfpwm(input_path, output_dir, segment_sec=30):
     output_dir = Path(output_dir)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Step 1: Split to wav segments
-    wav_pattern = output_dir / "audio_%d.wav"
-    subprocess.run([
-        "ffmpeg", "-y",
-        "-i", str(input_path),
-        "-vn", "-ac", "1", "-ar", "48000",
-        "-f", "segment", "-segment_time", str(segment_sec),
-        "-reset_timestamps", "1",
-        str(wav_pattern)
-    ], check=True)
+    SAMPLE_RATE = 48000
+    segment_samples = SAMPLE_RATE * segment_sec
 
-    # Step 2: Encode each wav to dfpwm
-    for wav_file in output_dir.glob("audio_*.wav"):
-        dfpwm_file = wav_file.with_suffix(".dfpwm")
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-i", str(wav_file),
-            "-ac", "1", "-ar", "48000",
-            "-c:a", "dfpwm",
-            str(dfpwm_file)
-        ], check=True)
-        wav_file.unlink()  # remove the intermediate WAV
+    container = av.open(str(input_path))
+    audio_stream = next((s for s in container.streams if s.type == "audio"), None)
 
+    if audio_stream is None:
+        container.close()
+        raise ValueError("Aucune piste audio trouvée")
+
+    resampler = av.audio.resampler.AudioResampler(
+        format="s16",
+        layout="mono",
+        rate=SAMPLE_RATE,
+    )
+
+    buffer_parts = []
+    buffer_count = 0
+    segment_index = 0
+
+    def write_segment(pcm_int16: np.ndarray, index: int):
+        # int16 mono -> float64 [-1.0, 1.0]
+        audio_float64 = pcm_int16.astype(np.float64) / 32768.0
+
+        encoded = dfpwm.compressor(audio_float64)
+
+        out_file = output_dir / f"audio_{index}.dfpwm"
+
+        with open(out_file, "wb") as f:
+            f.write(encoded)
+
+        print(f"✅ Segment écrit : {out_file}")
+
+    def flush_if_needed(force=False):
+        nonlocal buffer_parts, buffer_count, segment_index
+
+        if buffer_count == 0:
+            return
+
+        joined = np.concatenate(buffer_parts)
+
+        while len(joined) >= segment_samples:
+            segment = joined[:segment_samples]
+            joined = joined[segment_samples:]
+
+            write_segment(segment, segment_index)
+            segment_index += 1
+
+        buffer_parts = [joined] if len(joined) else []
+        buffer_count = len(joined)
+
+        if force and buffer_count > 0:
+            write_segment(joined, segment_index)
+            segment_index += 1
+            buffer_parts = []
+            buffer_count = 0
+
+    for packet in container.demux(audio_stream):
+        for frame in packet.decode():
+            resampled_frames = resampler.resample(frame)
+
+            if not resampled_frames:
+                continue
+
+            for rframe in resampled_frames:
+                pcm = rframe.to_ndarray()
+                pcm = np.asarray(pcm)
+
+                # mono => parfois (1, N), parfois (N,)
+                if pcm.ndim > 1:
+                    pcm = pcm[0]
+
+                pcm = pcm.astype(np.int16, copy=False)
+
+                buffer_parts.append(pcm)
+                buffer_count += len(pcm)
+
+                while buffer_count >= segment_samples:
+                    joined = np.concatenate(buffer_parts)
+                    segment = joined[:segment_samples]
+                    remain = joined[segment_samples:]
+
+                    write_segment(segment, segment_index)
+                    segment_index += 1
+
+                    buffer_parts = [remain] if len(remain) else []
+                    buffer_count = len(remain)
+
+    # flush du resampler + reste du buffer
+    tail_frames = resampler.resample(None)
+    if tail_frames:
+        for rframe in tail_frames:
+            pcm = rframe.to_ndarray()
+            pcm = np.asarray(pcm)
+            if pcm.ndim > 1:
+                pcm = pcm[0]
+            pcm = pcm.astype(np.int16, copy=False)
+            buffer_parts.append(pcm)
+            buffer_count += len(pcm)
+
+    if buffer_count > 0:
+        joined = np.concatenate(buffer_parts)
+        write_segment(joined, segment_index)
+
+    container.close()
     print("✅ Segmented and encoded to DFPWM!")
+
 
 def process_audio(input_path, output_dir):
     extract_audio_to_dfpwm(input_path, output_dir)
@@ -115,7 +203,7 @@ def convert_main(input_path, video_id='', width=230, height=100, fps=default_fps
     split.preprocess_video(input_path, temp_video, width=width, height=height, fps=fps, output_dir=output_dir)
 
     print("🔊 Processing audio...")
-    process_audio(temp_video, output_dir)
+    process_audio(input_path, output_dir)
 
     print("🖼️ Extracting delta frames...")
     split.extract_delta_frames(temp_video, output_dir, force_full_every=force_full_every)
