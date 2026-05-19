@@ -93,11 +93,23 @@ def background_conversion(video_id, url, width, height):
         write_json(status_file, {"status": "error", "error": str(e)})
 
     finally:
-        temp_files = ['video.mp4', 'audio.mp4']
-        for f in temp_files:
-            f_path = job_dir / f
-            if f_path.exists():
-                f_path.unlink()
+        # Supprimer la vidéo source téléchargée
+        if downloaded_file and Path(downloaded_file).exists():
+            Path(downloaded_file).unlink()
+            print(f"Deleted: {downloaded_file}")
+
+        # Chemin absolu basé sur l'emplacement de server.py
+        server_dir = Path(__file__).parent
+        temp_video = server_dir / f"temp_{video_id}.mp4"
+        print(f"Looking for temp file: {temp_video}")
+        if temp_video.exists():
+            temp_video.unlink()
+            print(f"Deleted: {temp_video}")
+        else:
+            print(f"Temp file not found: {temp_video}")
+            # Cherche tous les fichiers temp_ pour voir ce qui existe
+            for f in server_dir.glob("temp_*.mp4"):
+                print(f"Found temp file: {f}")
 
 
 def search_youtube_videos(query, max_results=6):
